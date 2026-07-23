@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# 前端开发依赖（node_modules 不提交，dist 构建产物需随插件分发故纳入版本库）
+plugins.v2/danmucustom/frontend/node_modules/
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+
+# 测试文件
+test_*.py
+
+# 学习参考目录（含嵌套 git 仓库，不作为插件源码分发）
+mp-plugin-study/

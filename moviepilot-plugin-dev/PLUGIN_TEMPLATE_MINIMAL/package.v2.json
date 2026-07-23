@@ -1,0 +1,14 @@
+{
+  "DemoMinimal": {
+    "name": "演示最小插件",
+    "description": "MoviePilot V2 插件最小可运行模板（纯后端）",
+    "labels": "模板,演示",
+    "version": "1.0.0",
+    "icon": "mdi-puzzle-outline",
+    "author": "you",
+    "level": 1,
+    "history": {
+      "v1.0.0": "初始模板"
+    }
+  }
+}
