@@ -565,3 +565,9 @@ class DanmuTaskManager:
             h.update(str(p).encode("utf-8"))
             h.update(b"\x00")
         return h.hexdigest()
+
+    def get_config_hash_for_file(self, file_path: str) -> Optional[str]:
+        """获取文件中已记录的 config_hash，没有则返回 None。"""
+        with self._lock:
+            rec = self._file_status.get(file_path)
+            return rec.get("config_hash") if rec else None

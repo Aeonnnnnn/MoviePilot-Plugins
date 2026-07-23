@@ -1,15 +1,15 @@
 
-.file-browser-list[data-v-234cec66] {
+.file-browser-list[data-v-8ba79938] {
   max-height: 600px;
   overflow-y: auto;
 }
-.file-item[data-v-234cec66] {
+.file-item[data-v-8ba79938] {
   border-bottom: 1px solid rgba(var(--v-border-color), 0.12);
 }
-.file-item-dir[data-v-234cec66]:hover {
+.file-item-dir[data-v-8ba79938]:hover {
   background-color: rgba(var(--v-theme-warning), 0.05);
   cursor: pointer;
 }
-.file-item-media[data-v-234cec66]:hover {
+.file-item-media[data-v-8ba79938]:hover {
   background-color: rgba(var(--v-theme-secondary), 0.05);
 }

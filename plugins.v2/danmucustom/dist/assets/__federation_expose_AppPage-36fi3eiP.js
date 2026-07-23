@@ -1,5 +1,5 @@
 import { importShared } from './__federation_fn_import-DE4nw86B.js';
-import AppPageScrape from './__federation_expose_AppPageScrape-BInNnUAM.js';
+import AppPageScrape from './__federation_expose_AppPageScrape-DtP18i0C.js';
 import _sfc_main$1 from './__federation_expose_AppPageFilter-Byh53Wi9.js';
 
 const {openBlock:_openBlock,createBlock:_createBlock,createCommentVNode:_createCommentVNode} = await importShared('vue');

@@ -19,6 +19,54 @@
             {{ actionResult.message }}
           </VAlert>
 
+          <!-- 任务控制栏（暂停/继续/取消） -->
+          <VCardText v-if="scrapeProgress.running || scrapeProgress.paused" class="pb-0">
+            <VRow class="align-center">
+              <VCol>
+                <VAlert density="compact" :type="scrapeProgress.paused ? 'warning' : 'info'" variant="tonal" class="mb-0">
+                  <VIcon :icon="scrapeProgress.paused ? 'mdi-pause-circle' : 'mdi-play-circle'" size="18" class="mr-1" />
+                  {{ scrapeProgress.paused ? '任务已暂停，点击「继续」恢复刮削' : '任务运行中… 可暂停后继续' }}
+                </VAlert>
+              </VCol>
+              <VCol cols="auto">
+                <VBtn
+                  v-if="!scrapeProgress.paused"
+                  color="warning"
+                  variant="tonal"
+                  size="small"
+                  prepend-icon="mdi-pause"
+                  :loading="taskActionLoading === 'pause'"
+                  @click="taskPause"
+                  class="mr-2"
+                >
+                  暂停
+                </VBtn>
+                <VBtn
+                  v-else
+                  color="success"
+                  variant="tonal"
+                  size="small"
+                  prepend-icon="mdi-play"
+                  :loading="taskActionLoading === 'resume'"
+                  @click="taskResume"
+                  class="mr-2"
+                >
+                  继续
+                </VBtn>
+                <VBtn
+                  color="error"
+                  variant="tonal"
+                  size="small"
+                  prepend-icon="mdi-stop"
+                  :loading="taskActionLoading === 'cancel'"
+                  @click="taskCancel"
+                >
+                  取消
+                </VBtn>
+              </VCol>
+            </VRow>
+          </VCardText>
+
           <!-- 状态概览 -->
           <VCardText>
             <VRow>
@@ -34,9 +82,9 @@
             </VRow>
 
             <VProgressLinear
-              v-if="scrapeProgress.total > 0 && scrapeProgress.running"
+              v-if="scrapeProgress.total > 0 && (scrapeProgress.running || scrapeProgress.paused)"
               :model-value="scrapeProgress.total > 0 ? ((scrapeProgress.success + scrapeProgress.failed) / scrapeProgress.total * 100) : 0"
-              color="primary"
+              :color="scrapeProgress.paused ? 'warning' : 'primary'"
               height="8"
               class="mt-4"
               rounded
@@ -80,19 +128,7 @@
                   目录刮削
                 </VBtn>
               </VCol>
-              <VCol cols="12" sm="6" md="4" lg="2">
-                <VBtn
-                  block
-                  color="info"
-                  variant="tonal"
-                  size="large"
-                  prepend-icon="mdi-magnify"
-                  @click="showSearchDialog = true"
-                >
-                  手动匹配
-                </VBtn>
-              </VCol>
-              <VCol cols="12" sm="6" md="4" lg="2">
+              <VCol cols="12" sm="6" md="4" lg="3">
                 <VBtn
                   block
                   color="success"
@@ -105,7 +141,7 @@
                   刷新状态
                 </VBtn>
               </VCol>
-              <VCol cols="12" sm="6" md="4" lg="2">
+              <VCol cols="12" sm="6" md="4" lg="3">
                 <VBtn
                   block
                   variant="outlined"
@@ -116,7 +152,7 @@
                   文件浏览
                 </VBtn>
               </VCol>
-              <VCol cols="12" sm="6" md="4" lg="2">
+              <VCol cols="12" sm="6" md="4" lg="3">
                 <VBtn
                   block
                   variant="outlined"
@@ -133,23 +169,22 @@
       </VCol>
     </VRow>
 
-    <!-- 文件浏览对话框 -->
-    <VDialog v-model="showFileBrowser" fullscreen>
-      <VCard>
+    <VDialog v-model="showFileBrowser" max-width="1100" scrollable>
+      <VCard max-height="80vh">
         <VCardItem class="d-flex align-center">
           <VCardTitle>文件浏览</VCardTitle>
           <VSpacer />
           <VBtn icon="mdi-close" variant="text" @click="showFileBrowser = false" />
         </VCardItem>
         <VDivider />
-        <VCardText style="min-height: 60vh;">
+        <VCardText style="overflow-y: auto; max-height: 65vh;">
           <FileBrowser :plugin-id="pluginId" :api="api" />
         </VCardText>
       </VCard>
     </VDialog>
 
     <!-- 刮削历史对话框 -->
-    <VDialog v-model="showHistoryDialog" max-width="900">
+    <VDialog v-model="showHistoryDialog" max-width="1000">
       <VCard>
         <VCardItem class="d-flex align-center">
           <VCardTitle>刮削历史</VCardTitle>
@@ -169,12 +204,12 @@
         </VCardItem>
         <VDivider />
 
-        <VCardText>
+        <VCardText style="overflow-x: auto;">
           <VAlert v-if="historyError" type="error" variant="tonal" class="mb-3">
             {{ historyError }}
           </VAlert>
 
-          <VTable v-if="scrapeHistory.length > 0" density="compact">
+          <VTable v-if="scrapeHistory.length > 0" density="compact" style="min-width: 780px;">
             <thead>
               <tr>
                 <th>文件</th>
@@ -263,75 +298,6 @@
       </VCard>
     </VDialog>
 
-    <!-- 手动匹配对话框 -->
-    <VDialog v-model="showSearchDialog" max-width="600">
-      <VCard>
-        <VCardItem><VCardTitle>手动匹配番剧</VCardTitle></VCardItem>
-        <VCardText>
-          <VTextField
-            v-model="searchKeyword"
-            label="番剧名称"
-            placeholder="输入关键词搜索"
-            variant="outlined"
-            append-inner-icon="mdi-magnify"
-            @keyup.enter="searchAnime"
-            @click:append-inner="searchAnime"
-          />
-          <VAlert v-if="searchError" type="warning" variant="tonal" class="mt-2">
-            {{ searchError }}
-          </VAlert>
-          <VList v-if="searchResults.length > 0" class="mt-2" density="compact">
-            <VListItem
-              v-for="anime in searchResults"
-              :key="anime.anime_id || anime.id"
-              :title="anime.anime_title || anime.title"
-              :subtitle="`ID: ${anime.anime_id || anime.id}`"
-              @click="selectAnime(anime)"
-            >
-              <template #append>
-                <VBtn icon="mdi-check" size="small" variant="text" color="primary" />
-              </template>
-            </VListItem>
-          </VList>
-          <VAlert v-else-if="searchKeyword && searchDone && !searchError" type="info" variant="tonal" class="mt-2">
-            未找到匹配的番剧
-          </VAlert>
-
-          <template v-if="selectedAnime">
-            <VDivider class="my-3" />
-            <div class="text-subtitle-2 mb-2">已选择: {{ selectedAnime.anime_title || selectedAnime.title }}</div>
-            <VTextField
-              v-model="episodeOffset"
-              label="集数偏移"
-              type="number"
-              variant="outlined"
-              hint="正数=后移，负数=前移"
-              persistent-hint
-            />
-            <VTextField
-              v-model="matchFilePath"
-              label="视频文件路径"
-              variant="outlined"
-              hint="要匹配的视频文件路径"
-              persistent-hint
-            />
-          </template>
-        </VCardText>
-        <VCardActions>
-          <VSpacer />
-          <VBtn variant="text" @click="showSearchDialog = false">取消</VBtn>
-          <VBtn
-            v-if="selectedAnime"
-            color="primary"
-            variant="tonal"
-            :loading="actionLoading === 'match'"
-            @click="saveMatch"
-          >
-            保存匹配
-          </VBtn>
-        </VCardActions>
-      </VCard>
-    </VDialog>
   </VContainer>
 </template>
 
@@ -340,8 +306,8 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import {
   mdiMovieOpenStar,
   mdiPlayCircle,
+  mdiPauseCircle,
   mdiFolderSearch,
-  mdiMagnify,
   mdiRefresh,
   mdiFileVideo,
   mdiPlay,
@@ -386,9 +352,11 @@ const loading = ref(false)
 const error = ref('')
 const actionLoading = ref(null)
 const actionResult = ref(null)
+const taskActionLoading = ref(null)
 
 const scrapeProgress = reactive({
   running: false,
+  paused: false,
   total: 0,
   current: 0,
   current_file: '',
@@ -458,32 +426,47 @@ const loadHistory = async (page = historyPage.value) => {
   }
 }
 
-const statsCards = computed(() => [
-  {
-    title: '刮削状态',
-    value: scrapeProgress.running ? '运行中' : '空闲',
-    icon: scrapeProgress.running ? mdiPlay : mdiStopCircle,
-    color: scrapeProgress.running ? 'success' : 'grey',
-  },
-  {
-    title: '总任务',
-    value: scrapeProgress.total || 0,
-    icon: 'mdi-numeric',
-    color: 'info',
-  },
-  {
-    title: '成功',
-    value: scrapeProgress.success || 0,
-    icon: mdiCheckCircle,
-    color: 'success',
-  },
-  {
-    title: '失败',
-    value: scrapeProgress.failed || 0,
-    icon: mdiAlertCircle,
-    color: 'error',
-  },
-])
+const statsCards = computed(() => {
+  let statusText = '空闲'
+  let statusColor = 'grey'
+  let statusIcon = mdiStopCircle
+  if (scrapeProgress.paused) {
+    statusText = '已暂停'
+    statusColor = 'warning'
+    statusIcon = mdiPauseCircle
+  } else if (scrapeProgress.running) {
+    statusText = '运行中'
+    statusColor = 'success'
+    statusIcon = mdiPlay
+  }
+  const skipped = scrapeProgress.skipped || 0
+  return [
+    {
+      title: '刮削状态',
+      value: statusText,
+      icon: statusIcon,
+      color: statusColor,
+    },
+    {
+      title: '总任务',
+      value: scrapeProgress.total || 0,
+      icon: 'mdi-numeric',
+      color: 'info',
+    },
+    {
+      title: '成功 / 跳过',
+      value: `${scrapeProgress.success || 0} / ${skipped}`,
+      icon: mdiCheckCircle,
+      color: 'success',
+    },
+    {
+      title: '失败',
+      value: scrapeProgress.failed || 0,
+      icon: mdiAlertCircle,
+      color: 'error',
+    },
+  ]
+})
 
 // 对话框
 const showDirectoryDialog = ref(false)
@@ -492,30 +475,37 @@ const showHistoryDialog = ref(false)
 const directoryPath = ref('')
 const batchMode = ref(false)
 
-// 刮削历史对话框打开时自动加载
-const onHistoryDialogOpen = () => {
-  if (showHistoryDialog.value) {
-    loadHistory(1)
+// 轮询定时器
+let pollingTimer = null
+
+const startPolling = () => {
+  stopPolling()
+  pollingTimer = setInterval(refreshStatus, 3000)
+}
+
+const stopPolling = () => {
+  if (pollingTimer) {
+    clearInterval(pollingTimer)
+    pollingTimer = null
   }
 }
 
-// 手动匹配
-const showSearchDialog = ref(false)
-const searchKeyword = ref('')
-const searchResults = ref([])
-const searchDone = ref(false)
-const searchError = ref('')
-const selectedAnime = ref(null)
-const episodeOffset = ref(0)
-const matchFilePath = ref('')
-
 const refreshStatus = async () => {
-  loading.value = true
-  error.value = ''
   try {
-    const res = await requestGet('/status')
+    const res = await requestGet('/task/status')
     const statusData = unwrapResponse(res) || {}
-    Object.assign(scrapeProgress, statusData)
+    const st = statusData?.status || 'idle'
+    scrapeProgress.running = st === 'running'
+    scrapeProgress.paused = st === 'paused'
+    scrapeProgress.total = statusData?.total || 0
+    scrapeProgress.success = statusData?.success || 0
+    scrapeProgress.failed = statusData?.failed || 0
+    scrapeProgress.skipped = statusData?.skipped || 0
+    scrapeProgress.current_file = statusData?.current_file || ''
+    // 如果任务结束（非 running / paused），停止轮询
+    if (!scrapeProgress.running && !scrapeProgress.paused) {
+      stopPolling()
+    }
   } catch (err) {
     if (err?.response?.status === 404 || err?.status === 404) {
       error.value = '插件未启用或后端 API 未注册，请先在插件配置中启用插件并保存。'
@@ -536,6 +526,7 @@ const startGlobalScrape = async () => {
       type: res?.success ? 'success' : 'error',
       message: res?.message || '刮削已启动',
     }
+    startPolling()
     setTimeout(refreshStatus, 2000)
   } catch (err) {
     actionResult.value = { type: 'error', message: err?.response?.status === 404 || err?.status === 404 ? '插件未启用，请先在插件配置中启用插件并保存。' : `请求失败: ${err.message}` }
@@ -560,6 +551,7 @@ const startDirectoryScrape = async () => {
       type: res?.success ? 'success' : 'error',
       message: res?.message || '刮削已启动',
     }
+    startPolling()
     showDirectoryDialog.value = false
     setTimeout(refreshStatus, 2000)
   } catch (err) {
@@ -569,59 +561,66 @@ const startDirectoryScrape = async () => {
   }
 }
 
-const searchAnime = async () => {
-  if (!searchKeyword.value.trim()) return
-  searchError.value = ''
-  searchResults.value = []
-  searchDone.value = false
+// --- 任务控制 ---
+const taskPause = async () => {
+  if (!confirm('确定要暂停当前刮削任务吗？暂停后可继续。')) return
+  taskActionLoading.value = 'pause'
+  actionResult.value = null
   try {
-    const res = await requestGet('/search_anime', {
-      params: { keyword: searchKeyword.value }
-    })
+    const res = await requestGet('/task/pause')
     if (res?.success) {
-      searchResults.value = Array.isArray(res?.data) ? res.data : []
+      scrapeProgress.paused = true
+      scrapeProgress.running = false
+      actionResult.value = { type: 'success', message: res.message || '任务已暂停' }
     } else {
-      searchError.value = res?.message || '搜索失败'
+      actionResult.value = { type: 'error', message: res?.message || '暂停失败' }
     }
-    searchDone.value = true
   } catch (err) {
-    searchError.value = err?.response?.data?.message || err?.message || '网络请求失败'
-    searchDone.value = true
+    actionResult.value = { type: 'error', message: `暂停失败：${err?.message || err}` }
+  } finally {
+    taskActionLoading.value = null
   }
 }
 
-const selectAnime = (anime) => {
-  selectedAnime.value = anime
-}
-
-const saveMatch = async () => {
-  if (!selectedAnime.value || !matchFilePath.value.trim()) return
-  actionLoading.value = 'match'
+const taskResume = async () => {
+  taskActionLoading.value = 'resume'
+  actionResult.value = null
   try {
-    const res = await requestPost('/manual_match', {
-      anime_id: selectedAnime.value.anime_id || selectedAnime.value.id,
-      anime_title: selectedAnime.value.anime_title || selectedAnime.value.title,
-      file_path: matchFilePath.value,
-      episode_offset: episodeOffset.value,
-    })
-    actionResult.value = {
-      type: res?.success ? 'success' : 'error',
-      message: res?.message || '匹配已保存',
-    }
+    const res = await requestGet('/task/resume')
     if (res?.success) {
-      showSearchDialog.value = false
-      selectedAnime.value = null
-      searchKeyword.value = ''
-      searchResults.value = []
-      searchDone.value = false
-      searchError.value = ''
-      matchFilePath.value = ''
-      episodeOffset.value = 0
+      scrapeProgress.paused = false
+      scrapeProgress.running = true
+      actionResult.value = { type: 'success', message: res.message || '任务已恢复' }
+      startPolling()
+    } else {
+      actionResult.value = { type: 'error', message: res?.message || '恢复失败' }
     }
   } catch (err) {
-    actionResult.value = { type: 'error', message: `保存失败: ${err.message}` }
+    actionResult.value = { type: 'error', message: `恢复失败：${err?.message || err}` }
   } finally {
-    actionLoading.value = null
+    taskActionLoading.value = null
+  }
+}
+
+const taskCancel = async () => {
+  if (!confirm('确定要取消当前刮削任务吗？已完成的文件不会丢失，未完成的可重新提交。')) return
+  taskActionLoading.value = 'cancel'
+  actionResult.value = null
+  try {
+    await requestGet('/task/clear')
+    const res = await requestGet('/task/cancel')
+    if (res?.success) {
+      scrapeProgress.running = false
+      scrapeProgress.paused = false
+      actionResult.value = { type: 'success', message: res.message || '任务已取消' }
+      stopPolling()
+    } else {
+      actionResult.value = { type: 'error', message: res?.message || '取消失败' }
+    }
+  } catch (err) {
+    actionResult.value = { type: 'error', message: `取消失败：${err?.message || err}` }
+  } finally {
+    taskActionLoading.value = null
   }
 }
 

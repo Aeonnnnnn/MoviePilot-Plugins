@@ -52,7 +52,27 @@
             class="file-item file-item-dir"
           >
             <template #prepend>
-              <VIcon icon="mdi-folder" color="warning" size="20" />
+              <VIcon :icon="item.is_bottom_dir ? 'mdi-folder-music' : 'mdi-folder'" :color="item.is_bottom_dir ? 'warning' : 'warning'" size="20" />
+            </template>
+            <!-- 目录刮削状态 -->
+            <template #subtitle>
+              <div v-if="item.total_media_count > 0" class="d-flex align-center gap-1 flex-wrap mt-1">
+                <VChip
+                  size="x-small"
+                  :color="item.scraped_count >= item.total_media_count ? 'success' : item.scraped_count > 0 ? 'info' : 'grey'"
+                  variant="tonal"
+                >
+                  {{ item.scraped_count >= item.total_media_count ? '✅ 全部刮削' : `📺 已刮削 ${item.scraped_count}/${item.total_media_count}` }}
+                </VChip>
+                <VChip v-if="item.has_subtitle_files" size="x-small" color="purple" variant="tonal">
+                  📝 含字幕
+                </VChip>
+              </div>
+              <div v-else-if="item.has_subtitle_files" class="mt-1">
+                <VChip size="x-small" color="purple" variant="tonal">
+                  📝 含字幕
+                </VChip>
+              </div>
             </template>
             <template #append>
               <VChip
