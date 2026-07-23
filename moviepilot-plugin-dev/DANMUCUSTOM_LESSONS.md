@@ -47,6 +47,24 @@
 - **根因**：前端用 `Promise.all`，任一 reject 抛到 catch 显示"获取失败"。
 - **修复**：改用 `Promise.allSettled`，分类失败才阻断，用户信用数据失败仅置空。
 
+### 坑 6：搜索番剧永远返回空结果
+- **现象**：FileBrowser 搜索框输入任意番剧名（包括 B 站存在的）都返回 0 条结果。
+- **根因**：外部弹弹 API 返回 `{"success": true, "animes": [...]}`，数组在 `animes` 字段。后端直接把整个对象包进 `schemas.Response(success=True, data=data)`，前端 unwrap 后取 `d?.data`，但 `data` 字段根本不存在 → `undefined → []`。
+- **修复**：后端 `search_anime` 返回时提取 `animes` 数组：`return schemas.Response(success=True, data=data.get("animes") or [])`；前端兼容新旧：`d?.animes || d?.data || []`。
+- **教训**：对外部 API 的响应，不能透传，要解析到自己协议层再返回；前端取值也必须知道后端返回的 key 名。
+
+### 坑 7：目录级手动匹配对子目录无效
+- **现象**：在番剧总目录点「匹配」，但子目录 `Season 1/` 下的文件刮削时走的还是 hash 匹配，没用到手动指定。
+- **根因**：`_load_manual_mapping(directory)` 只检查传入的 `directory` 本身，不从父目录向上查找。`get_comment_id()` 传的是文件的直接父目录（`os.path.dirname(file_path)`），所以 `.dandan.anime.json` 必须和视频文件在同一层。
+- **修复**：向上递归查找（最多 2 层），同时用 `_is_show_root()` 阻止跨番剧越界。
+
+### 坑 8：向上递归查找的边界设计
+- **风险**：向上递归如果不设边界，在分类目录（如 `日本/`）上的误匹配会污染该目录下所有番剧。
+- **方案**：双信号识别番剧根目录——
+  1. `tvshow.nfo`（Kodi/Emby/Jellyfin 标准，MoviePilot 自动生成）
+  2. 存在 `Season X` / `Specials` 子目录（用户关闭 NFO 生成时的兜底）
+- **教训**：递归查找必须设硬边界，单信号不够要用双信号兜底。`tvshow.nfo` 是标准但用户可能关闭 NFO 生成，需要 Season 目录作为备用信号。
+
 ---
 
 ## 二、关键代码模式（已验证）
@@ -83,6 +101,58 @@ if (userR.status === 'fulfilled') { /* 赋值用户数据 */ }
 else { blockedUsers.value = [] }   // 非核心，置空不阻断
 ```
 
+### 后端：外部 API 调用的正确姿势 —— 不透明传
+```python
+# ❌ 错误：直接透传外部响应
+data = requests.get(url).json()
+return schemas.Response(success=True, data=data)
+# 前端拿到 unwrap 后是原始对象 {success:true, animes:[...]}
+# 取 d?.data 拿到 undefined → []
+
+# ✅ 正确：提取目标字段再包装
+data = requests.get(url).json()
+animes = data.get("animes") or []
+return schemas.Response(success=True, data=animes)
+# 前端拿到 unwrap 后是数组 [...]
+
+# 前端侧兼容新旧格式：
+results = Array.isArray(d) ? d : (d?.animes || d?.data || [])
+```
+
+### 后端：配置文件向上递归查找 + 硬边界
+```python
+@classmethod
+def _load_manual_mapping(cls, directory: str):
+    """从文件所在目录向上递归查找，最多2层，遇番剧根停止。"""
+    current = os.path.abspath(directory)
+    for depth in range(3):  # 当前 + 父 + 祖父
+        # 检查配置
+        result = cls._try_read_config(current)
+        if result is not None:
+            return result
+        # 硬边界：遇番剧根停止
+        if cls._is_show_root(current):
+            break
+        # 向上
+        parent = os.path.dirname(current)
+        if parent == current:
+            break
+        current = parent
+    return None
+
+@staticmethod
+def _is_show_root(directory: str) -> bool:
+    """双信号：tvshow.nfo OR SeasonX/Specials 子目录"""
+    if os.path.exists(os.path.join(directory, "tvshow.nfo")):
+        return True
+    for name in os.listdir(directory):
+        low = name.lower()
+        if low.startswith("season") or low == "specials":
+            if os.path.isdir(os.path.join(directory, name)):
+                return True
+    return False
+```
+
 ---
 
 ## 三、根因归类（沉淀为检查清单）
@@ -93,6 +163,9 @@ else { blockedUsers.value = [] }   // 非核心，置空不阻断
 4. **异常被吞**：`logger.error` 无 traceback → 运行侧只能看到前端 500。
 5. **返回结构不一致**：后端返回 `{categories:{}}` 而前端当数组 → 显示异常。
 6. **并发脆弱**：`Promise.all` 让非核心接口拖垮主页面。
+7. **外部 API 字段透传**：外部返回结构不归你控制，直接透传给前端 → 前后端 key 不对齐 → 永远空结果。
+8. **查找作用域过窄**：只在文件直接父目录查找配置 → 父目录匹配对子目录文件完全无效。
+9. **递归无边界**：向上查找不设停止条件 → 误匹配会污染同级/上级所有目录。
 
 ---
 
@@ -106,6 +179,8 @@ else { blockedUsers.value = [] }   // 非核心，置空不阻断
 - 改前端必须 `npm run build`，且递增 `plugin_version` + `package.v2.json`（防坑 1）。
 - 交付时明确：重新安装 → 重载插件 → 浏览器硬刷新。
 - 不声称已在 MP 运行侧验证，除非看到真实日志/页面结果。
+- **外部 API 调用**：必须先确认响应结构（`web_fetch` / curl），提取目标字段后再包装自己的 Response，不要透传（防坑 7）。
+- **配置文件查找**：需要向上/向下递归时，必须设硬边界（防坑 8/9）。边界用双信号（如 tvshow.nfo + Season 目录），单信号不可靠。
 
 ---
 
@@ -117,3 +192,4 @@ else { blockedUsers.value = [] }   // 非核心，置空不阻断
 | custom.6 | 配置按钮 emit('switch')、Config 词库管理 tab、共享 FilterManager、AppPage 透传 api |
 | custom.7 | 紧急修复 get_sidebar_nav 语法错误（多余 `{`） |
 | custom.9 | 修复词库管理 API 500：user_tracker 空值防御 + categories 返回数组 + allSettled 容错 + logger.exception |
+| v3.0.0 | 搜索 API 修复（animes 字段提取+前端兼容）、手动匹配向上递归（2层+tvshow.nfo/Season双信号边界）、关键词智能提取、批量分季刮削、response_model 根治、SQLite 争用修复、历史分页持久化 |
