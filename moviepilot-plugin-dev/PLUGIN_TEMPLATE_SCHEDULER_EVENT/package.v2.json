@@ -1,0 +1,14 @@
+{
+  "DemoScheduler": {
+    "name": "演示调度事件插件",
+    "description": "MoviePilot V2 插件模板（定时任务 + 事件监听）",
+    "labels": "模板,调度,事件",
+    "version": "1.0.0",
+    "icon": "mdi-clock-outline",
+    "author": "you",
+    "level": 1,
+    "history": {
+      "v1.0.0": "初始模板"
+    }
+  }
+}

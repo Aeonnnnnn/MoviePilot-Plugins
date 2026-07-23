@@ -1,0 +1,16 @@
+{
+  "DemoFrontend": {
+    "name": "演示前端插件",
+    "description": "MoviePilot V2 插件模板（Vue 联邦：Config/Page/AppPage）",
+    "labels": "模板,演示,前端",
+    "version": "1.0.0",
+    "icon": "mdi-puzzle-outline",
+    "author": "you",
+    "level": 1,
+    "v2": true,
+    "system_version": ">=2.12.0",
+    "history": {
+      "v1.0.0": "初始模板"
+    }
+  }
+}
