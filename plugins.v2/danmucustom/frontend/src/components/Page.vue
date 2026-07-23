@@ -98,17 +98,6 @@
         <VCol cols="12" sm="6" md="4" lg="3">
           <VBtn
             block
-            color="info"
-            variant="tonal"
-            prepend-icon="mdi-magnify"
-            @click="showSearchDialog = true"
-          >
-            手动匹配
-          </VBtn>
-        </VCol>
-        <VCol cols="12" sm="6" md="4" lg="3">
-          <VBtn
-            block
             color="success"
             variant="tonal"
             prepend-icon="mdi-refresh"
@@ -153,22 +142,22 @@
     </VCardText>
 
     <!-- 文件浏览对话框 -->
-    <VDialog v-model="showFileBrowser" fullscreen>
-      <VCard>
+    <VDialog v-model="showFileBrowser" max-width="1100" scrollable>
+      <VCard max-height="80vh">
         <VCardItem class="d-flex align-center">
           <VCardTitle>文件浏览</VCardTitle>
           <VSpacer />
           <VBtn icon="mdi-close" variant="text" @click="showFileBrowser = false" />
         </VCardItem>
         <VDivider />
-        <VCardText style="min-height: 60vh;">
+        <VCardText style="overflow-y: auto; max-height: 65vh;">
           <FileBrowser :plugin-id="pluginId" :api="api" />
         </VCardText>
       </VCard>
     </VDialog>
 
     <!-- 刮削历史对话框 -->
-    <VDialog v-model="showHistoryDialog" max-width="900">
+    <VDialog v-model="showHistoryDialog" max-width="1000">
       <VCard>
         <VCardItem class="d-flex align-center">
           <VCardTitle>刮削历史</VCardTitle>
@@ -187,11 +176,11 @@
           <VBtn icon="mdi-close" variant="text" @click="showHistoryDialog = false" />
         </VCardItem>
         <VDivider />
-        <VCardText>
+        <VCardText style="overflow-x: auto;">
           <VAlert v-if="historyError" type="error" variant="tonal" class="mb-3">
             {{ historyError }}
           </VAlert>
-          <VTable v-if="scrapeHistory.length > 0" density="compact">
+          <VTable v-if="scrapeHistory.length > 0" density="compact" style="min-width: 780px;">"
             <thead>
               <tr>
                 <th>文件</th>
@@ -279,74 +268,6 @@
       </VCard>
     </VDialog>
 
-    <!-- 手动匹配对话框 -->
-    <VDialog v-model="showSearchDialog" max-width="600">
-      <VCard>
-        <VCardItem><VCardTitle>手动匹配番剧</VCardTitle></VCardItem>
-        <VCardText>
-          <VTextField
-            v-model="searchKeyword"
-            label="番剧名称"
-            placeholder="输入关键词搜索"
-            variant="outlined"
-            append-inner-icon="mdi-magnify"
-            @keyup.enter="searchAnime"
-            @click:append-inner="searchAnime"
-          />
-          <VAlert v-if="searchError" type="warning" variant="tonal" class="mt-2">
-            {{ searchError }}
-          </VAlert>
-          <VList v-if="searchResults.length > 0" class="mt-2" density="compact">
-            <VListItem
-              v-for="anime in searchResults"
-              :key="anime.anime_id || anime.id"
-              :title="anime.anime_title || anime.title"
-              :subtitle="`ID: ${anime.anime_id || anime.id}`"
-              @click="selectAnime(anime)"
-            >
-              <template #append>
-                <VBtn icon="mdi-check" size="small" variant="text" color="primary" />
-              </template>
-            </VListItem>
-          </VList>
-          <VAlert v-else-if="searchKeyword && searchDone && !searchError" type="info" variant="tonal" class="mt-2">
-            未找到匹配的番剧
-          </VAlert>
-          <template v-if="selectedAnime">
-            <VDivider class="my-3" />
-            <div class="text-subtitle-2 mb-2">已选择: {{ selectedAnime.anime_title || selectedAnime.title }}</div>
-            <VTextField
-              v-model="episodeOffset"
-              label="集数偏移"
-              type="number"
-              variant="outlined"
-              hint="正数=后移，负数=前移"
-              persistent-hint
-            />
-            <VTextField
-              v-model="matchFilePath"
-              label="视频文件路径"
-              variant="outlined"
-              hint="要匹配的视频文件路径"
-              persistent-hint
-            />
-          </template>
-        </VCardText>
-        <VCardActions>
-          <VSpacer />
-          <VBtn variant="text" @click="showSearchDialog = false">取消</VBtn>
-          <VBtn
-            v-if="selectedAnime"
-            color="primary"
-            variant="tonal"
-            :loading="actionLoading === 'match'"
-            @click="saveMatch"
-          >
-            保存匹配
-          </VBtn>
-        </VCardActions>
-      </VCard>
-    </VDialog>
   </VCard>
 </template>
 
@@ -358,7 +279,6 @@ import {
   mdiStopCircle,
   mdiPlay,
   mdiFolderSearch,
-  mdiMagnify,
   mdiRefresh,
   mdiCog,
   mdiFolderMultiple,
@@ -549,71 +469,6 @@ const startDirectoryScrape = async () => {
     } else {
       error.value = `刮削请求失败: ${err.message}`
     }
-  } finally {
-    actionLoading.value = null
-  }
-}
-
-// 搜索番剧（带错误展示）
-const showSearchDialog = ref(false)
-const searchKeyword = ref('')
-const searchResults = ref([])
-const searchDone = ref(false)
-const searchError = ref('')
-const selectedAnime = ref(null)
-const episodeOffset = ref(0)
-const matchFilePath = ref('')
-
-const searchAnime = async () => {
-  if (!searchKeyword.value.trim()) return
-  searchError.value = ''
-  searchResults.value = []
-  searchDone.value = false
-  try {
-    const res = await requestGet('/search_anime', {
-      params: { keyword: searchKeyword.value }
-    })
-    if (res?.success) {
-      searchResults.value = Array.isArray(res?.data) ? res.data : []
-    } else {
-      searchError.value = res?.message || '搜索失败'
-    }
-    searchDone.value = true
-  } catch (err) {
-    searchError.value = err?.response?.data?.message || err?.message || '网络请求失败'
-    searchDone.value = true
-  }
-}
-
-const selectAnime = (anime) => {
-  selectedAnime.value = anime
-}
-
-const saveMatch = async () => {
-  if (!selectedAnime.value || !matchFilePath.value.trim()) return
-  actionLoading.value = 'match'
-  try {
-    const res = await requestPost('/manual_match', {
-      anime_id: selectedAnime.value.anime_id || selectedAnime.value.id,
-      anime_title: selectedAnime.value.anime_title || selectedAnime.value.title,
-      file_path: matchFilePath.value,
-      episode_offset: episodeOffset.value,
-    })
-    if (res?.success) {
-      showSearchDialog.value = false
-      selectedAnime.value = null
-      searchKeyword.value = ''
-      searchResults.value = []
-      searchDone.value = false
-      searchError.value = ''
-      matchFilePath.value = ''
-      episodeOffset.value = 0
-      await refreshData()
-    } else {
-      error.value = res?.message || '保存失败'
-    }
-  } catch (err) {
-    error.value = `保存失败: ${err.message}`
   } finally {
     actionLoading.value = null
   }

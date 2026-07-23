@@ -63,7 +63,7 @@ class DanmuCustom(_PluginBase):
     # 主题色
     plugin_color = "#3B5E8E"
     # 插件版本
-    plugin_version = "3.1.0"
+    plugin_version = "3.2.0"
     # 插件作者
     plugin_author = "Aeonnnnnn"
     # 作者主页
@@ -1328,6 +1328,34 @@ class DanmuCustom(_PluginBase):
                     collected.append(file_path)
         return collected
 
+    def _get_ass_output_path(self, media_path: str) -> str:
+        """获取媒体文件对应的 .danmu.ass 输出路径。"""
+        dir_name = os.path.dirname(media_path)
+        base_name = os.path.splitext(os.path.basename(media_path))[0]
+        return os.path.join(dir_name, f"{base_name}.danmu.ass")
+
+    def _count_scraped_in_path(self, path: str) -> Tuple[int, int]:
+        """统计目录下媒体文件总数和已刮削（有 .danmu.ass）的文件数。
+        返回 (total_media, scraped_count)。
+        """
+        all_files = self._collect_media_files(path)
+        total = len(all_files)
+        if total == 0:
+            return 0, 0
+        current_hash = self._compute_config_hash()
+        scraped = 0
+        for f in all_files:
+            out_path = self._get_ass_output_path(f)
+            if os.path.exists(out_path):
+                # 检查 config_hash 是否匹配，避免配置变更导致误判
+                existing_hash = self._task_manager.get_config_hash_for_file(f)
+                if existing_hash and existing_hash == current_hash:
+                    scraped += 1
+                elif not existing_hash and os.path.getsize(out_path) > 0:
+                    # 无哈希记录但文件存在且有内容，也视为已刮削
+                    scraped += 1
+        return total, scraped
+
     def _start_scrape_batch(self, files: List[str], label: str) -> bool:
         """把批量刮削提交到后台受控 worker 队列（不在 API 请求线程里执行大批量）。"""
         if not files:
@@ -1396,12 +1424,16 @@ class DanmuCustom(_PluginBase):
         files = self._collect_media_files(directory_path)
         if not files:
             return schemas.Response(success=False, message="目录下没有支持的媒体文件")
+        _, scraped = self._count_scraped_in_path(directory_path)
+        msg = f"已开始刮削，共 {len(files)} 个文件"
+        if scraped > 0:
+            msg += f"（其中 {scraped} 个已刮削将跳过）"
         if not self._start_scrape_batch(files, f"目录 {directory_path}"):
             return schemas.Response(success=False, message="已有刮削任务进行中，请稍后再试")
         return schemas.Response(
             success=True,
-            message=f"已开始刮削，共 {len(files)} 个文件",
-            data={"total": len(files)}
+            message=msg,
+            data={"total": len(files), "skipped_existing": scraped}
         )
 
     def batch_season_scrape(self, directory_path: str = None) -> schemas.Response:
@@ -1440,9 +1472,12 @@ class DanmuCustom(_PluginBase):
         # 统计每个子文件夹的媒体文件数和匹配状态
         season_info = []
         total_files = 0
+        skipped_dirs = []
         for subdir in subdirs:
             files = self._collect_media_files(subdir)
+            total_media, scraped = self._count_scraped_in_path(subdir)
             manual = self._get_manual_match(subdir, check_legacy=True)
+            all_done = total_media > 0 and scraped >= total_media
             info = {
                 "name": os.path.basename(subdir),
                 "path": subdir,
@@ -1450,28 +1485,43 @@ class DanmuCustom(_PluginBase):
                 "has_manual_match": manual is not None,
                 "anime_id": manual.get("animeId") if manual else None,
                 "anime_title": manual.get("animeTitle") if manual else None,
+                "scraped_count": scraped,
+                "all_scraped": all_done,
             }
             season_info.append(info)
+            if all_done:
+                skipped_dirs.append(os.path.basename(subdir))
+                continue  # 全部已刮削，跳过此文件夹
             total_files += len(files)
         
         if total_files == 0:
-            return schemas.Response(success=False, message="子文件夹中没有支持的媒体文件")
+            msg = "子文件夹中没有需要刮削的媒体文件"
+            if skipped_dirs:
+                msg += f"（{len(skipped_dirs)} 个子文件夹已全部刮削完成）"
+            return schemas.Response(success=False, message=msg)
         
         # 启动批量刮削
         all_files = []
         for subdir in subdirs:
+            info_match = next((s for s in season_info if s["path"] == subdir), None)
+            if info_match and info_match.get("all_scraped"):
+                continue
             all_files.extend(self._collect_media_files(subdir))
         
         if not self._start_scrape_batch(all_files, f"分季批量 ({len(subdirs)}个子文件夹)"):
             return schemas.Response(success=False, message="已有刮削任务进行中，请稍后再试")
         
+        msg = f"已开始分季批量刮削，共 {len(subdirs)} 个子文件夹，{total_files} 个文件"
+        if skipped_dirs:
+            msg += f"（{len(skipped_dirs)} 个子文件夹已全部刮削完成跳过）"
         return schemas.Response(
             success=True,
-            message=f"已开始分季批量刮削，共 {len(subdirs)} 个子文件夹，{total_files} 个文件",
+            message=msg,
             data={
                 "total_files": total_files,
                 "subdirectories": len(subdirs),
                 "seasons": season_info,
+                "skipped_dirs": skipped_dirs,
             }
         )
 
@@ -1487,20 +1537,29 @@ class DanmuCustom(_PluginBase):
         paths = [path.strip() for path in self._path.split('\n') if path.strip()]
 
         files = []
+        total_scraped = 0
         for path in paths:
             if not os.path.exists(path):
                 logger.warning(f"路径不存在: {path}")
                 return schemas.Response(success=False, message=f"路径不存在: {path}")
             files.extend(self._collect_media_files(path))
+            _, scraped = self._count_scraped_in_path(path)
+            total_scraped += scraped
 
         if not files:
             return schemas.Response(success=False, message="未找到支持的媒体文件")
+
+        expect_skip = total_scraped
+        msg = f"已开始刮削，共 {len(files)} 个文件"
+        if expect_skip > 0:
+            msg += f"（其中 {expect_skip} 个已刮削将跳过）"
+
         if not self._start_scrape_batch(files, "全局"):
             return schemas.Response(success=False, message="已有刮削任务进行中")
         return schemas.Response(
             success=True,
-            message=f"已开始刮削，共 {len(files)} 个文件",
-            data={"total": len(files)}
+            message=msg,
+            data={"total": len(files), "skipped_existing": expect_skip}
         )
     
     @eventmanager.register(EventType.TransferComplete)
@@ -1752,6 +1811,8 @@ class DanmuCustom(_PluginBase):
                 child["manual_match"] = manual_dir_match
                 child["manual_scope"] = manual_dir_match.get("scope") if manual_dir_match else None
                 child["directory_path"] = entry.path
+                # 快速扫描子目录内媒体与弹幕状态（仅一层，用于展示刮削状态）
+                self._add_directory_scrape_info(child, entry.path)
                 result["children"].append(child)
 
             # 添加媒体文件到结果
@@ -1789,6 +1850,48 @@ class DanmuCustom(_PluginBase):
             # 出错时返回基本信息，不中断整个扫描
             result["error"] = str(e)
             return result
+
+    def _add_directory_scrape_info(self, child: Dict[str, Any], dir_path: str) -> None:
+        """为目录条目添加刮削状态信息（仅一层快速扫描，兼顾性能）。
+        填充字段：scraped_count、total_media_count、is_bottom_dir。
+        """
+        try:
+            with os.scandir(dir_path) as sub_it:
+                sub_entries = list(sub_it)
+            media_files = []
+            danmu_names = set()
+            sub_dirs = []
+            has_subtitle_files = False
+            for se in sub_entries:
+                if se.is_dir() and not se.name.startswith('.'):
+                    sub_dirs.append(se)
+                elif se.is_file(follow_symlinks=False):
+                    if se.name.endswith('.danmu.ass'):
+                        danmu_names.add(se.name[:-10])  # 去掉 .danmu.ass 后缀
+                    elif se.name.lower().endswith(('.ass', '.ssa', '.srt', '.vtt')):
+                        has_subtitle_files = True
+                    elif self._is_supported_file(se.path):
+                        media_files.append(se)
+            total_media = len(media_files)
+            if total_media > 0:
+                scraped = sum(
+                    1 for mf in media_files
+                    if os.path.splitext(mf.name)[0] in danmu_names
+                )
+                child["scraped_count"] = scraped
+                child["total_media_count"] = total_media
+                # 是否为底层目录：有媒体文件 且 没有子目录或所有子目录都是空/纯目录
+                child["is_bottom_dir"] = True
+                if has_subtitle_files:
+                    child["has_subtitle_files"] = True
+            elif has_subtitle_files and not sub_dirs:
+                # 可能只有字幕文件没有媒体文件，也是底层目录
+                child["is_bottom_dir"] = True
+                child["has_subtitle_files"] = True
+                child["scraped_count"] = 0
+                child["total_media_count"] = 0
+        except (OSError, PermissionError):
+            pass  # 无权限或 IO 错误则跳过，不影响主扫描流程
 
     def generate_danmu_single(self, file_path: str) -> schemas.Response:
         """

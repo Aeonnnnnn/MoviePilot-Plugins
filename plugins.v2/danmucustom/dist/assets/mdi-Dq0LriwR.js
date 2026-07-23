@@ -4,8 +4,9 @@ var mdiAlertCircle = "M13,13H11V7H13M13,17H11V15H13M12,2A10,10 0 0,0 2,12A10,10 
 var mdiCheckCircle = "M12 2C6.5 2 2 6.5 2 12S6.5 22 12 22 22 17.5 22 12 17.5 2 12 2M10 17L5 12L6.41 10.59L10 14.17L17.59 6.58L19 8L10 17Z";
 var mdiFileVideo = "M13,9H18.5L13,3.5V9M6,2H14L20,8V20A2,2 0 0,1 18,22H6C4.89,22 4,21.1 4,20V4C4,2.89 4.89,2 6,2M17,19V13L14,15.2V13H7V19H14V16.8L17,19Z";
 var mdiInformation = "M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z";
+var mdiPauseCircle = "M15,16H13V8H15M11,16H9V8H11M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z";
 var mdiPlay = "M8,5.14V19.14L19,12.14L8,5.14Z";
 var mdiPlayCircle = "M10,16.5V7.5L16,12M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z";
 var mdiStopCircle = "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M9,9H15V15H9";
 
-export { mdiStopCircle as a, mdiCheckCircle as b, mdiAlertCircle as c, mdiInformation as d, mdiAlert as e, mdiFileVideo as f, mdiPlayCircle as g, mdiPlay as m };
+export { mdiCheckCircle as a, mdiAlertCircle as b, mdiPauseCircle as c, mdiPlay as d, mdiInformation as e, mdiAlert as f, mdiFileVideo as g, mdiPlayCircle as h, mdiStopCircle as m };
