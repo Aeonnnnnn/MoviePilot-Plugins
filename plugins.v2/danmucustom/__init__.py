@@ -63,7 +63,7 @@ class DanmuCustom(_PluginBase):
     # 主题色
     plugin_color = "#3B5E8E"
     # 插件版本
-    plugin_version = "3.0.0"
+    plugin_version = "3.1.0"
     # 插件作者
     plugin_author = "Aeonnnnnn"
     # 作者主页
@@ -652,6 +652,14 @@ class DanmuCustom(_PluginBase):
             "auth": "bear",
             "summary": "移除手动匹配",
             "description": "移除指定目录的手动匹配"
+        },
+        {
+            "path": "/tmdb_match",
+            "endpoint": self.tmdb_match_file,
+            "methods": ["GET"],
+            "auth": "bear",
+            "summary": "TMDB匹配文件",
+            "description": "根据文件名通过TMDB搜索弹弹Play，需要file_path参数"
         },
         # ===== 弹幕过滤系统 API =====
         {
@@ -1860,6 +1868,12 @@ class DanmuCustom(_PluginBase):
             if not data.get("success", False):
                 message = data.get("errorMessage") or "搜索失败"
                 logger.warning(f"弹弹搜索返回失败: {message}")
+                # 429 配额耗尽时给出明确指引
+                if response.status_code == 429 or data.get("errorCode") == 429:
+                    return schemas.Response(
+                        success=False,
+                        message="搜索接口配额已耗尽（通常每日重置）。请改用「目录刮削」通过文件 hash 匹配，不受配额影响。"
+                    )
                 return schemas.Response(success=False, message=message)
 
             # 外部 API 搜索结果在 "animes" 字段中，直接提取数组返回
@@ -1982,6 +1996,133 @@ class DanmuCustom(_PluginBase):
 
         self._update_manual_match_cache(manual_dir, None)
         return schemas.Response(success=True, message="目录手动匹配已移除", data={"directory": manual_dir})
+
+    def tmdb_match_file(self, file_path: str = None) -> schemas.Response:
+        """
+        根据文件名 → TMDB搜索 → 弹弹Play匹配
+        适用于 hash 失效（如转码/压缩后）但文件名仍包含番剧信息的场景
+        """
+        if not file_path:
+            return schemas.Response(success=False, message="file_path 参数必填")
+
+        file_name = os.path.basename(file_path)
+        logger.info(f"[TMDB匹配] 开始处理文件: {file_name}")
+
+        # 1. 从文件名提取元数据
+        try:
+            meta = MetaInfo(file_path)
+        except Exception as e:
+            return schemas.Response(success=False, message=f"无法解析文件名: {str(e)}")
+
+        title = meta.name or meta.cn_name or ""
+        season = meta.season
+        episode_num = meta.episode
+        logger.info(f"[TMDB匹配] 解析结果: name={title}, season={season}, episode={episode_num}")
+
+        if not title:
+            return schemas.Response(success=False, message="无法从文件名提取作品名称")
+
+        # 2. 使用 MoviePilot 内置 TMDB 搜索获取 TMDB ID
+        try:
+            media_info = self.media_chain.recognize_media(meta=meta)
+        except Exception as e:
+            logger.warning(f"[TMDB匹配] MoviePilot 媒体识别异常: {e}")
+            return schemas.Response(success=False, message=f"媒体识别失败: {str(e)}")
+
+        if not media_info or not media_info.tmdb_id:
+            return schemas.Response(
+                success=False,
+                message=f"MoviePilot 无法识别「{title}」的 TMDB ID，建议尝试手动搜索匹配"
+            )
+
+        tmdb_id = media_info.tmdb_id
+        tmdb_id_type = 1 if media_info.type == MediaType.MOVIE else 0
+        media_type_label = "电影" if tmdb_id_type == 1 else "电视剧"
+
+        logger.info(f"[TMDB匹配] TMDB: id={tmdb_id}, type={media_type_label}, "
+                     f"title={media_info.title or '?'}")
+
+        # 3. 用 TMDB ID 去弹弹Play搜索
+        try:
+            tmdb_url = f"{generator.DanmuAPI.BASE_URL}/search/tmdb"
+            payload = {"tmdb_id": tmdb_id, "tmdb_id_type": tmdb_id_type}
+            if episode_num:
+                try:
+                    payload["episode"] = int(episode_num)
+                except (ValueError, TypeError):
+                    payload["episode"] = 1
+            else:
+                payload["episode"] = 1
+
+            logger.info(f"[TMDB匹配] 请求弹弹Play: {tmdb_url} payload={payload}")
+            response = requests.post(
+                tmdb_url,
+                json=payload,
+                headers=generator.DanmuAPI.HEADERS,
+                timeout=generator.DanmuAPI.TIMEOUT
+            )
+
+            if response.status_code == 429:
+                return schemas.Response(success=False, message="弹弹Play API 配额耗尽，请稍后再试")
+
+            if response.status_code != 200:
+                logger.warning(f"[TMDB匹配] 弹弹Play 返回非200: {response.status_code}")
+                return schemas.Response(
+                    success=False,
+                    message=f"弹弹Play 请求失败 (HTTP {response.status_code})"
+                )
+
+            result = response.json()
+            logger.info(f"[TMDB匹配] 弹弹Play响应: {json.dumps(result, ensure_ascii=False)[:500]}")
+
+            animes = result.get("animes", [])
+            if not animes:
+                return schemas.Response(
+                    success=False,
+                    message=f"弹弹Play 没有收录 TMDB ID={tmdb_id} 的弹幕数据"
+                )
+
+            # 4. 组装返回结果
+            matches = []
+            for anime in animes:
+                anime_info = {
+                    "animeId": anime.get("animeId"),
+                    "animeTitle": anime.get("animeTitle"),
+                    "type": anime.get("type"),
+                    "typeDescription": anime.get("typeDescription"),
+                    "episodes": []
+                }
+                for ep in anime.get("episodes", []):
+                    anime_info["episodes"].append({
+                        "episodeId": ep.get("episodeId"),
+                        "episodeTitle": ep.get("episodeTitle"),
+                    })
+                matches.append(anime_info)
+
+            return schemas.Response(
+                success=True,
+                message=f"匹配成功! TMDB ID={tmdb_id} ({media_type_label}: {media_info.title or title})",
+                data={
+                    "file_path": file_path,
+                    "file_name": file_name,
+                    "tmdb_id": tmdb_id,
+                    "tmdb_id_type": tmdb_id_type,
+                    "tmdb_type_label": media_type_label,
+                    "tmdb_title": media_info.title or title,
+                    "parsed_name": title,
+                    "parsed_season": season,
+                    "parsed_episode": episode_num,
+                    "matches": matches,
+                }
+            )
+
+        except requests.exceptions.Timeout:
+            return schemas.Response(success=False, message="弹弹Play API 请求超时")
+        except requests.exceptions.ConnectionError:
+            return schemas.Response(success=False, message="无法连接弹弹Play API")
+        except Exception as e:
+            logger.error(f"[TMDB匹配] 异常: {e}", exc_info=True)
+            return schemas.Response(success=False, message=f"TMDB匹配异常: {str(e)}")
 
     def scan_subfolder(self, subfolder_path: str = None) -> schemas.Response:
         """

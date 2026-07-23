@@ -125,9 +125,19 @@
                 size="x-small"
                 color="info"
                 variant="text"
+                class="mr-1"
                 @click.stop="openFileManualMatch(item)"
               >
                 匹配
+              </VBtn>
+              <VBtn
+                size="x-small"
+                color="orange"
+                variant="text"
+                @click.stop="matchByTmdb(item)"
+                :loading="tmdbMatchingItem === item.path"
+              >
+                TMDB
               </VBtn>
             </template>
           </VListItem>
@@ -200,6 +210,95 @@
       </VCardActions>
     </VCard>
   </VDialog>
+
+  <!-- TMDB 匹配结果弹窗 -->
+  <VDialog v-model="showTmdbDialog" max-width="650">
+    <VCard>
+      <VCardItem>
+        <template #prepend>
+          <VIcon icon="mdi-database-search" color="orange" size="28" />
+        </template>
+        <VCardTitle>TMDB匹配结果</VCardTitle>
+        <VCardSubtitle>{{ tmdbTargetName }}</VCardSubtitle>
+      </VCardItem>
+      <VCardText>
+        <!-- 加载中 -->
+        <div v-if="tmdbLoading" class="text-center pa-6">
+          <VProgressCircular indeterminate color="orange" />
+          <div class="text-caption mt-2 text-medium-emphasis">
+            文件名 → TMDB 搜索 → 弹弹Play 匹配…
+          </div>
+        </div>
+
+        <!-- 失败 -->
+        <VAlert
+          v-else-if="!tmdbResult?.success"
+          type="warning"
+          variant="tonal"
+          :text="tmdbResult?.message || 'TMDB匹配失败'"
+        />
+
+        <!-- 成功 -->
+        <template v-else>
+          <!-- TMDB 识别信息 -->
+          <VAlert type="success" variant="tonal" class="mb-3">
+            <template #text>
+              <div>TMDB ID: <b>{{ tmdbResult.tmdb_id }}</b></div>
+              <div>类型: {{ tmdbResult.tmdb_type_label }}</div>
+              <div>识别: {{ tmdbResult.tmdb_title }}</div>
+            </template>
+          </VAlert>
+
+          <!-- 弹弹Play 匹配结果 -->
+          <div class="text-subtitle-1 mb-2">
+            弹弹Play 匹配到的番剧 ({{ (tmdbResult.matches || []).length }} 部):
+          </div>
+          <VList v-if="tmdbResult.matches?.length" density="compact" class="bg-grey-lighten-4">
+            <VListItem
+              v-for="anime in tmdbResult.matches"
+              :key="anime.animeId"
+            >
+              <template #prepend>
+                <VIcon icon="mdi-play-box" color="primary" size="20" />
+              </template>
+              <VListItemTitle>{{ anime.animeTitle }}</VListItemTitle>
+              <VListItemSubtitle>
+                ID: {{ anime.animeId }} | 类型: {{ anime.typeDescription || anime.type }}
+                <span v-if="anime.episodes?.length">
+                  | 集数: {{ anime.episodes.map(e => e.episodeTitle || e.episodeId).join(', ') }}
+                </span>
+              </VListItemSubtitle>
+              <template #append>
+                <VBtn
+                  size="small"
+                  color="success"
+                  variant="tonal"
+                  @click="applyTmdbMatch(anime)"
+                >
+                  使用此匹配
+                </VBtn>
+              </template>
+            </VListItem>
+          </VList>
+          <VAlert v-else type="info" variant="tonal">
+            弹弹Play 未收录该 TMDB ID 的弹幕数据
+          </VAlert>
+        </template>
+      </VCardText>
+      <VCardActions>
+        <VSpacer />
+        <VBtn variant="text" @click="showTmdbDialog = false">关闭</VBtn>
+        <VBtn
+          v-if="tmdbResult?.success && tmdbResult?.matches?.length"
+          color="primary"
+          variant="tonal"
+          @click="scrapeTargetAfterTmdb"
+        >
+          直接刮削
+        </VBtn>
+      </VCardActions>
+    </VCard>
+  </VDialog>
 </template>
 
 <script setup>
@@ -252,6 +351,14 @@ const searchDone = ref(false)
 const selectedAnime = ref(null)
 const episodeOffset = ref(0)
 const savingMatch = ref(false)
+
+// TMDB 匹配
+const tmdbMatchingItem = ref(null)
+const showTmdbDialog = ref(false)
+const tmdbTarget = ref(null)
+const tmdbTargetName = ref('')
+const tmdbResult = ref(null)
+const tmdbLoading = ref(false)
 
 // 加载根目录
 const loadRoot = async () => {
@@ -475,6 +582,77 @@ const saveMatch = async () => {
     actionMsg.value = { type: 'error', text: `保存失败: ${err.message}` }
   } finally {
     savingMatch.value = false
+  }
+}
+
+// TMDB 匹配文件
+const matchByTmdb = async (item) => {
+  tmdbMatchingItem.value = item.path
+  tmdbTarget.value = item
+  tmdbTargetName.value = item.path || item.name
+  tmdbResult.value = null
+  tmdbLoading.value = true
+  showTmdbDialog.value = true
+
+  try {
+    const res = await requestGet('/tmdb_match', { params: { file_path: item.path } })
+    const d = unwrap(res)
+    tmdbResult.value = d
+  } catch (err) {
+    tmdbResult.value = { success: false, message: `TMDB匹配请求失败: ${err.message}` }
+  } finally {
+    tmdbMatchingItem.value = null
+    tmdbLoading.value = false
+  }
+}
+
+// 应用 TMDB 匹配结果
+const applyTmdbMatch = async (anime) => {
+  if (!tmdbTarget.value || !anime) return
+  savingMatch.value = true
+  try {
+    const res = await requestPost('/manual_match', {
+      anime_id: anime.animeId,
+      anime_title: anime.animeTitle,
+      file_path: tmdbTarget.value.path,
+      episode_offset: 0,
+    })
+    const d = unwrap(res)
+    actionMsg.value = {
+      type: d?.success !== false ? 'success' : 'error',
+      text: d?.message || `TMDB匹配已保存: ${anime.animeTitle}`,
+    }
+    if (d?.success !== false) {
+      showTmdbDialog.value = false
+      setTimeout(refreshCurrent, 500)
+    }
+  } catch (err) {
+    actionMsg.value = { type: 'error', text: `保存TMDB匹配失败: ${err.message}` }
+  } finally {
+    savingMatch.value = false
+  }
+}
+
+// TMDB匹配后直接刮削
+const scrapeTargetAfterTmdb = async () => {
+  if (!tmdbTarget.value) return
+  showTmdbDialog.value = false
+  scrapingItem.value = tmdbTarget.value.path
+  actionMsg.value = null
+  try {
+    const res = await requestGet('/generate_danmu', { params: { file_path: tmdbTarget.value.path } })
+    const d = unwrap(res)
+    actionMsg.value = {
+      type: d?.success !== false ? 'success' : 'error',
+      text: d?.message || '弹幕生成完成',
+    }
+    if (d?.success !== false) {
+      setTimeout(refreshCurrent, 1500)
+    }
+  } catch (err) {
+    actionMsg.value = { type: 'error', text: `请求失败: ${err.message}` }
+  } finally {
+    scrapingItem.value = null
   }
 }
 

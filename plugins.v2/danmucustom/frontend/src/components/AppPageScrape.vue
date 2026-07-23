@@ -53,9 +53,9 @@
 
           <!-- 操作区 -->
           <VCardText>
-            <div class="text-subtitle-2 font-weight-bold mb-3">刮削操作</div>
+            <div class="text-subtitle-2 font-weight-bold mb-3">快速操作</div>
             <VRow>
-              <VCol cols="12" sm="6" md="3">
+              <VCol cols="12" sm="6" md="4" lg="2">
                 <VBtn
                   block
                   color="primary"
@@ -68,7 +68,7 @@
                   全局刮削
                 </VBtn>
               </VCol>
-              <VCol cols="12" sm="6" md="3">
+              <VCol cols="12" sm="6" md="4" lg="2">
                 <VBtn
                   block
                   color="secondary"
@@ -80,7 +80,7 @@
                   目录刮削
                 </VBtn>
               </VCol>
-              <VCol cols="12" sm="6" md="3">
+              <VCol cols="12" sm="6" md="4" lg="2">
                 <VBtn
                   block
                   color="info"
@@ -92,7 +92,7 @@
                   手动匹配
                 </VBtn>
               </VCol>
-              <VCol cols="12" sm="6" md="3">
+              <VCol cols="12" sm="6" md="4" lg="2">
                 <VBtn
                   block
                   color="success"
@@ -105,107 +105,140 @@
                   刷新状态
                 </VBtn>
               </VCol>
+              <VCol cols="12" sm="6" md="4" lg="2">
+                <VBtn
+                  block
+                  variant="outlined"
+                  size="large"
+                  prepend-icon="mdi-folder-multiple"
+                  @click="showFileBrowser = true"
+                >
+                  文件浏览
+                </VBtn>
+              </VCol>
+              <VCol cols="12" sm="6" md="4" lg="2">
+                <VBtn
+                  block
+                  variant="outlined"
+                  size="large"
+                  prepend-icon="mdi-history"
+                  @click="showHistoryDialog = true"
+                >
+                  刮削历史
+                </VBtn>
+              </VCol>
             </VRow>
           </VCardText>
         </VCard>
       </VCol>
-
-      <!-- 文件浏览器：扫描配置路径下的目录/文件，可逐目录查看匹配&刮削状态并操作 -->
-      <VCol cols="12">
-        <FileBrowser :plugin-id="pluginId" :api="api" />
-      </VCol>
-
-      <!-- 刮削历史（统一来自持久化 file_status，分页读取，异常会直接显示而非静默吞掉） -->
-      <VCol cols="12">
-        <VCard>
-          <VCardText>
-            <div class="d-flex align-center mb-3">
-              <div class="text-subtitle-2 font-weight-bold">刮削历史</div>
-              <VChip size="small" class="ml-2" color="primary" variant="tonal">{{ historyTotal }}</VChip>
-              <VSpacer />
-              <VSelect
-                v-model="historyStatusFilter"
-                :items="historyStatusOptions"
-                label="状态筛选"
-                density="compact"
-                variant="outlined"
-                hide-details
-                style="max-width: 100px"
-                @update:model-value="loadHistory(1)"
-              />
-              <VSelect
-                v-model="historyPageSize"
-                :items="[10, 15, 20, 30, 50]"
-                label="每页"
-                density="compact"
-                variant="outlined"
-                hide-details
-                style="max-width: 80px"
-                class="ml-2"
-                @update:model-value="loadHistory(1)"
-              />
-            </div>
-
-            <VAlert v-if="historyError" type="error" variant="tonal" class="mb-3">
-              获取历史失败: {{ historyError }}
-            </VAlert>
-
-            <VTable v-if="scrapeHistory.length > 0" density="compact">
-              <thead>
-                <tr>
-                  <th>文件</th>
-                  <th>状态</th>
-                  <th>耗时</th>
-                  <th>完成时间</th>
-                  <th>接收</th>
-                  <th>屏蔽</th>
-                  <th>实际</th>
-                  <th>输出</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(item, i) in scrapeHistory" :key="i">
-                  <td class="text-body-2" style="max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                    {{ item.file_name || item.file_path }}
-                  </td>
-                  <td>
-                    <VChip :color="statusColor(item.status)" size="small" variant="tonal">
-                      {{ statusText(item.status) }}
-                    </VChip>
-                  </td>
-                  <td class="text-caption">
-                    {{ item.duration_ms != null ? (item.duration_ms / 1000).toFixed(1) + 's' : '--' }}
-                  </td>
-                  <td class="text-caption">{{ item.finished_at || '--' }}</td>
-                  <td class="text-caption text-center">{{ item.danmu_counts?.received != null ? item.danmu_counts.received : '--' }}</td>
-                  <td class="text-caption text-center">{{ item.danmu_counts?.blocked != null ? item.danmu_counts.blocked : '--' }}</td>
-                  <td class="text-caption text-center">{{ item.danmu_counts?.actual != null ? item.danmu_counts.actual : '--' }}</td>
-                  <td class="text-caption">
-                    <span v-if="item.output_ass_path" class="text-success">已生成</span>
-                    <span v-else class="text-error">无</span>
-                  </td>
-                </tr>
-              </tbody>
-            </VTable>
-
-            <VAlert v-else-if="!historyError" type="info" variant="tonal" class="mt-2">
-              暂无刮削记录，点击上方按钮开始刮削
-            </VAlert>
-
-            <div class="d-flex justify-center mt-3">
-              <VPagination
-                v-if="historyTotalPages > 1"
-                v-model="historyPage"
-                :length="historyTotalPages"
-                :total-visible="7"
-                density="compact"
-                @update:model-value="loadHistory"
-              />
-            </div>
-          </VCardText>
-        </VCard>
-      </VCol>
     </VRow>
+
+    <!-- 文件浏览对话框 -->
+    <VDialog v-model="showFileBrowser" fullscreen>
+      <VCard>
+        <VCardItem class="d-flex align-center">
+          <VCardTitle>文件浏览</VCardTitle>
+          <VSpacer />
+          <VBtn icon="mdi-close" variant="text" @click="showFileBrowser = false" />
+        </VCardItem>
+        <VDivider />
+        <VCardText style="min-height: 60vh;">
+          <FileBrowser :plugin-id="pluginId" :api="api" />
+        </VCardText>
+      </VCard>
+    </VDialog>
+
+    <!-- 刮削历史对话框 -->
+    <VDialog v-model="showHistoryDialog" max-width="900">
+      <VCard>
+        <VCardItem class="d-flex align-center">
+          <VCardTitle>刮削历史</VCardTitle>
+          <VChip size="small" class="ml-2" color="primary" variant="tonal">{{ historyTotal }}</VChip>
+          <VSpacer />
+          <VSelect
+            v-model="historyStatusFilter"
+            :items="historyStatusOptions"
+            label="状态"
+            density="compact"
+            variant="outlined"
+            hide-details
+            style="max-width: 100px"
+            @update:model-value="loadHistory(1)"
+          />
+          <VBtn icon="mdi-close" variant="text" @click="showHistoryDialog = false" />
+        </VCardItem>
+        <VDivider />
+
+        <VCardText>
+          <VAlert v-if="historyError" type="error" variant="tonal" class="mb-3">
+            {{ historyError }}
+          </VAlert>
+
+          <VTable v-if="scrapeHistory.length > 0" density="compact">
+            <thead>
+              <tr>
+                <th>文件</th>
+                <th>状态</th>
+                <th>耗时</th>
+                <th>完成时间</th>
+                <th>接收</th>
+                <th>屏蔽</th>
+                <th>实际</th>
+                <th>输出</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(item, i) in scrapeHistory" :key="i">
+                <td class="text-body-2" style="max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  {{ item.file_name || item.file_path }}
+                </td>
+                <td>
+                  <VChip :color="statusColor(item.status)" size="small" variant="tonal">
+                    {{ statusText(item.status) }}
+                  </VChip>
+                </td>
+                <td class="text-caption">
+                  {{ item.duration_ms != null ? (item.duration_ms / 1000).toFixed(1) + 's' : '--' }}
+                </td>
+                <td class="text-caption">{{ item.finished_at || '--' }}</td>
+                <td class="text-caption text-center">{{ item.danmu_counts?.received != null ? item.danmu_counts.received : '--' }}</td>
+                <td class="text-caption text-center">{{ item.danmu_counts?.blocked != null ? item.danmu_counts.blocked : '--' }}</td>
+                <td class="text-caption text-center">{{ item.danmu_counts?.actual != null ? item.danmu_counts.actual : '--' }}</td>
+                <td class="text-caption">
+                  <span v-if="item.output_ass_path" class="text-success">已生成</span>
+                  <span v-else class="text-error">无</span>
+                </td>
+              </tr>
+            </tbody>
+          </VTable>
+          <VAlert v-else-if="!historyError" type="info" variant="tonal" class="mt-2">
+            暂无刮削记录
+          </VAlert>
+
+          <div class="d-flex justify-center mt-3">
+            <VSelect
+              v-model="historyPageSize"
+              :items="[10, 15, 20, 30, 50]"
+              label="每页"
+              density="compact"
+              variant="outlined"
+              hide-details
+              style="max-width: 80px;"
+              class="mr-4"
+              @update:model-value="loadHistory(1)"
+            />
+            <VPagination
+              v-if="historyTotalPages > 1"
+              v-model="historyPage"
+              :length="historyTotalPages"
+              :total-visible="7"
+              density="compact"
+              @update:model-value="loadHistory"
+            />
+          </div>
+        </VCardText>
+      </VCard>
+    </VDialog>
 
     <!-- 目录刮削对话框 -->
     <VDialog v-model="showDirectoryDialog" max-width="500">
@@ -244,6 +277,9 @@
             @keyup.enter="searchAnime"
             @click:append-inner="searchAnime"
           />
+          <VAlert v-if="searchError" type="warning" variant="tonal" class="mt-2">
+            {{ searchError }}
+          </VAlert>
           <VList v-if="searchResults.length > 0" class="mt-2" density="compact">
             <VListItem
               v-for="anime in searchResults"
@@ -257,7 +293,7 @@
               </template>
             </VListItem>
           </VList>
-          <VAlert v-else-if="searchKeyword && searchDone" type="info" variant="tonal" class="mt-2">
+          <VAlert v-else-if="searchKeyword && searchDone && !searchError" type="info" variant="tonal" class="mt-2">
             未找到匹配的番剧
           </VAlert>
 
@@ -312,16 +348,16 @@ import {
   mdiStopCircle,
   mdiCheckCircle,
   mdiAlertCircle,
+  mdiFolderMultiple,
+  mdiHistory,
 } from '@mdi/js'
 import axios from 'axios'
 import FileBrowser from './FileBrowser.vue'
 
 const { pluginId, navKey, api } = defineProps(['pluginId', 'config', 'eventBus', 'navKey', 'api'])
 
-// 后端 API 注册的插件 ID（大小写敏感，必须与后端 class 名一致）
 const API_PLUGIN_ID = 'DanmuCustom'
 
-// 统一封装 API 请求，优先使用 MoviePilot 注入的 api 对象
 const requestGet = async (path, options = {}) => {
   if (api?.get) {
     return await api.get(`plugin/${API_PLUGIN_ID}${path}`, options)
@@ -338,7 +374,6 @@ const requestPost = async (path, data = {}, options = {}) => {
   return res.data
 }
 
-// 解析响应体：兼容 schemas.Response 包装和普通 dict（如 /status 直接返回）
 const unwrapResponse = (res) => {
   const data = res?.data ?? res
   if (data && typeof data === 'object' && 'success' in data && data.success && data.data) {
@@ -352,7 +387,6 @@ const error = ref('')
 const actionLoading = ref(null)
 const actionResult = ref(null)
 
-// 刮削进度
 const scrapeProgress = reactive({
   running: false,
   total: 0,
@@ -379,7 +413,6 @@ const historyStatusOptions = [
   { title: '等待', value: 'pending' },
 ]
 
-// 状态展示工具
 const statusColor = (s) => {
   switch (s) {
     case 'success': return 'success'
@@ -403,7 +436,6 @@ const statusText = (s) => {
   }
 }
 
-// 加载刮削历史（持久化分页数据，不隐藏 500 错误）
 const loadHistory = async (page = historyPage.value) => {
   historyPage.value = page
   historyError.value = ''
@@ -421,13 +453,11 @@ const loadHistory = async (page = historyPage.value) => {
       scrapeHistory.value = []
     }
   } catch (err) {
-    // 不吞掉异常：直接暴露给用户，便于判断后端是否已修复
     historyError.value = err?.message || String(err)
     scrapeHistory.value = []
   }
 }
 
-// 统计卡片
 const statsCards = computed(() => [
   {
     title: '刮削状态',
@@ -455,32 +485,37 @@ const statsCards = computed(() => [
   },
 ])
 
-// 目录刮削
+// 对话框
 const showDirectoryDialog = ref(false)
+const showFileBrowser = ref(false)
+const showHistoryDialog = ref(false)
 const directoryPath = ref('')
 const batchMode = ref(false)
+
+// 刮削历史对话框打开时自动加载
+const onHistoryDialogOpen = () => {
+  if (showHistoryDialog.value) {
+    loadHistory(1)
+  }
+}
 
 // 手动匹配
 const showSearchDialog = ref(false)
 const searchKeyword = ref('')
 const searchResults = ref([])
 const searchDone = ref(false)
+const searchError = ref('')
 const selectedAnime = ref(null)
 const episodeOffset = ref(0)
 const matchFilePath = ref('')
 
-// 刷新状态
 const refreshStatus = async () => {
   loading.value = true
   error.value = ''
   try {
-    // /status 返回普通 dict，不是 schemas.Response 包装
     const res = await requestGet('/status')
     const statusData = unwrapResponse(res) || {}
     Object.assign(scrapeProgress, statusData)
-
-    // 获取历史（不静默吞掉错误，异常直接显示）
-    await loadHistory()
   } catch (err) {
     if (err?.response?.status === 404 || err?.status === 404) {
       error.value = '插件未启用或后端 API 未注册，请先在插件配置中启用插件并保存。'
@@ -492,7 +527,6 @@ const refreshStatus = async () => {
   }
 }
 
-// 全局刮削
 const startGlobalScrape = async () => {
   actionLoading.value = 'global'
   actionResult.value = null
@@ -510,7 +544,6 @@ const startGlobalScrape = async () => {
   }
 }
 
-// 目录刮削
 const startDirectoryScrape = async () => {
   if (!directoryPath.value.trim()) {
     actionResult.value = { type: 'error', message: '请输入目录路径' }
@@ -536,26 +569,31 @@ const startDirectoryScrape = async () => {
   }
 }
 
-// 搜索番剧
 const searchAnime = async () => {
   if (!searchKeyword.value.trim()) return
+  searchError.value = ''
+  searchResults.value = []
+  searchDone.value = false
   try {
     const res = await requestGet('/search_anime', {
       params: { keyword: searchKeyword.value }
     })
-    searchResults.value = res?.data || []
+    if (res?.success) {
+      searchResults.value = Array.isArray(res?.data) ? res.data : []
+    } else {
+      searchError.value = res?.message || '搜索失败'
+    }
     searchDone.value = true
   } catch (err) {
-    actionResult.value = { type: 'error', message: `搜索失败: ${err.message}` }
+    searchError.value = err?.response?.data?.message || err?.message || '网络请求失败'
+    searchDone.value = true
   }
 }
 
-// 选择番剧
 const selectAnime = (anime) => {
   selectedAnime.value = anime
 }
 
-// 保存匹配
 const saveMatch = async () => {
   if (!selectedAnime.value || !matchFilePath.value.trim()) return
   actionLoading.value = 'match'
@@ -576,6 +614,7 @@ const saveMatch = async () => {
       searchKeyword.value = ''
       searchResults.value = []
       searchDone.value = false
+      searchError.value = ''
       matchFilePath.value = ''
       episodeOffset.value = 0
     }

@@ -4,13 +4,14 @@
     "name": "弹幕刮削定制版",
     "description": "基于原版Danmu重构，使用弹弹play平台生成弹幕字幕文件，实现弹幕播放。集成词库管理/封禁用户/持久化配置/七阶段弹幕内容过滤系统，支持批量分季匹配下载，Vue前端页面。",
     "labels": "弹幕,字幕,刮削,过滤",
-    "version": "3.0.0",
+    "version": "3.1.0",
     "v2": true,
     "icon": "https://raw.githubusercontent.com/Aeonnnnnn/MoviePilot-Plugins/main/icons/danmu.png",
     "author": "Aeonnnnnn",
     "level": 1,
     "system_version": ">=2.12.0",
     "history": {
+      "v3.1.0": "新增TMDB匹配功能:文件浏览器增加TMDB按钮,文件名→TMDB搜索→弹弹Play匹配,解决转码/压缩后hash失效场景。搜索接口429配额提示(引导使用目录刮削)。主页去嵌套滚动条优化(文件浏览/历史记录改为弹窗按钮)。搜索关键词智能提取改进。",
       "v3.0.0": "基于原版Danmu v1.9.0全面重构。架构:独立DanmuCustom插件与原版共存、Vue Federation前端(文件浏览器/配置/历史)、后台worker队列+SQLite任务持久化。匹配体系:文件浏览器可视化选目录/文件、手动搜索绑定animeId+集数偏移(目录级匹配向上递归2层覆盖子目录)、双信号番剧根识别(tvshow.nfo/Season子目录,兼容关闭NFO场景)、搜索API修复(外部API返回animes字段,后端提取+前端animes/data双字段兼容)、搜索关键词智能提取(剥离集数/分辨率信息)。过滤系统:七阶段弹幕内容过滤、词库管理/封禁用户/正则/组合规则、信用分/封禁重启不丢失。稳定性:根治12个接口500(response_model与实际返回类型不匹配)、SQLite争用修复(批量统一落盘替代逐文件写库)、时间序列化归一化工具(safe_time/_epoch/safe_json)、历史记录持久化分页(重启不归零)。性能优化:相似过滤双字shingle倒排+长度/bigram预筛、各阶段耗时日志、原生字幕合并缓存。任务管理:批量分季刮削(自动识别SeasonX子目录独立匹配)、任务控制API(暂停/继续/取消/清空)。代码质量:docstring补齐、输入校验、并发安全"
     }
   }
