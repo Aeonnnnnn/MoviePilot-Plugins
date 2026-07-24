@@ -4,34 +4,39 @@ import { a as axios } from './index-vUEH2SzA.js';
 import { F as FileBrowser } from './FileBrowser-Br1t0ODW.js';
 import { _ as _export_sfc } from './_plugin-vue_export-helper-pcqpp-6-.js';
 
-const {resolveComponent:_resolveComponent,createVNode:_createVNode,createTextVNode:_createTextVNode,withCtx:_withCtx,toDisplayString:_toDisplayString,openBlock:_openBlock,createBlock:_createBlock,createCommentVNode:_createCommentVNode,renderList:_renderList,Fragment:_Fragment,createElementBlock:_createElementBlock,createElementVNode:_createElementVNode} = await importShared('vue');
+const {resolveComponent:_resolveComponent,createVNode:_createVNode,createTextVNode:_createTextVNode,withCtx:_withCtx,toDisplayString:_toDisplayString,openBlock:_openBlock,createBlock:_createBlock,createCommentVNode:_createCommentVNode,createElementVNode:_createElementVNode,renderList:_renderList,Fragment:_Fragment,createElementBlock:_createElementBlock} = await importShared('vue');
 
 
-const _hoisted_1 = { class: "text-caption text-medium-emphasis" };
-const _hoisted_2 = { class: "text-h5 font-weight-bold mt-1" };
-const _hoisted_3 = {
+const _hoisted_1 = {
+  class: "d-flex align-center flex-wrap",
+  style: {"gap":"8px"}
+};
+const _hoisted_2 = { class: "ml-1 text-caption" };
+const _hoisted_3 = { class: "text-caption text-medium-emphasis" };
+const _hoisted_4 = { class: "text-h5 font-weight-bold mt-1" };
+const _hoisted_5 = {
   key: 1,
   class: "mt-2 text-body-2 text-medium-emphasis"
 };
-const _hoisted_4 = {
+const _hoisted_6 = {
   class: "text-body-2",
   style: {"max-width":"320px","overflow":"hidden","text-overflow":"ellipsis","white-space":"nowrap"}
 };
-const _hoisted_5 = { class: "text-caption" };
-const _hoisted_6 = { class: "text-caption" };
-const _hoisted_7 = { class: "text-caption text-center" };
-const _hoisted_8 = { class: "text-caption text-center" };
+const _hoisted_7 = { class: "text-caption" };
+const _hoisted_8 = { class: "text-caption" };
 const _hoisted_9 = { class: "text-caption text-center" };
-const _hoisted_10 = { class: "text-caption" };
-const _hoisted_11 = {
+const _hoisted_10 = { class: "text-caption text-center" };
+const _hoisted_11 = { class: "text-caption text-center" };
+const _hoisted_12 = { class: "text-caption" };
+const _hoisted_13 = {
   key: 0,
   class: "text-success"
 };
-const _hoisted_12 = {
+const _hoisted_14 = {
   key: 1,
   class: "text-error"
 };
-const _hoisted_13 = { class: "d-flex justify-center mt-3" };
+const _hoisted_15 = { class: "d-flex justify-center mt-3" };
 
 const {ref,reactive,computed,onMounted} = await importShared('vue');
 
@@ -235,9 +240,11 @@ const startGlobalScrape = async () => {
   actionResult.value = null;
   try {
     const res = await requestGet('/generate_danmu_with_path');
+    const body = unwrapResponse(res) || {};
     actionResult.value = {
       type: res?.success ? 'success' : 'error',
       message: res?.message || '刮削已启动',
+      preMatch: body?.pre_match,
     };
     startPolling();
     setTimeout(refreshStatus, 2000);
@@ -260,9 +267,11 @@ const startDirectoryScrape = async () => {
     const res = await requestGet(`/${endpoint}`, {
       params: { directory_path: directoryPath.value }
     });
+    const body = unwrapResponse(res) || {};
     actionResult.value = {
       type: res?.success ? 'success' : 'error',
       message: res?.message || '刮削已启动',
+      preMatch: body?.pre_match,
     };
     startPolling();
     showDirectoryDialog.value = false;
@@ -347,6 +356,7 @@ return (_ctx, _cache) => {
   const _component_VCardSubtitle = _resolveComponent("VCardSubtitle");
   const _component_VCardItem = _resolveComponent("VCardItem");
   const _component_VAlert = _resolveComponent("VAlert");
+  const _component_VChip = _resolveComponent("VChip");
   const _component_VCol = _resolveComponent("VCol");
   const _component_VBtn = _resolveComponent("VBtn");
   const _component_VRow = _resolveComponent("VRow");
@@ -356,7 +366,6 @@ return (_ctx, _cache) => {
   const _component_VDivider = _resolveComponent("VDivider");
   const _component_VSpacer = _resolveComponent("VSpacer");
   const _component_VDialog = _resolveComponent("VDialog");
-  const _component_VChip = _resolveComponent("VChip");
   const _component_VSelect = _resolveComponent("VSelect");
   const _component_VTable = _resolveComponent("VTable");
   const _component_VPagination = _resolveComponent("VPagination");
@@ -423,7 +432,24 @@ return (_ctx, _cache) => {
                         class: "mx-4 mb-2"
                       }, {
                         default: _withCtx(() => [
-                          _createTextVNode(_toDisplayString(actionResult.value.message), 1)
+                          _createElementVNode("div", _hoisted_1, [
+                            _createElementVNode("span", null, _toDisplayString(actionResult.value.message), 1),
+                            (actionResult.value.preMatch && actionResult.value.preMatch.total > 0)
+                              ? (_openBlock(), _createBlock(_component_VChip, {
+                                  key: 0,
+                                  color: actionResult.value.preMatch.matched > 0 ? 'success' : 'warning',
+                                  size: "small",
+                                  variant: "elevated",
+                                  "prepend-icon": "mdi-rocket-launch"
+                                }, {
+                                  default: _withCtx(() => [
+                                    _createTextVNode(" 预匹配 " + _toDisplayString(actionResult.value.preMatch.matched) + "/" + _toDisplayString(actionResult.value.preMatch.total) + " ", 1),
+                                    _createElementVNode("span", _hoisted_2, "(" + _toDisplayString(actionResult.value.preMatch.elapsed) + "s" + _toDisplayString(actionResult.value.preMatch.source ? ' · ' + actionResult.value.preMatch.source : '') + ")", 1)
+                                  ]),
+                                  _: 1
+                                }, 8, ["color"]))
+                              : _createCommentVNode("", true)
+                          ])
                         ]),
                         _: 1
                       }, 8, ["type"]))
@@ -531,8 +557,8 @@ return (_ctx, _cache) => {
                                   class: "pa-3 text-center"
                                 }, {
                                   default: _withCtx(() => [
-                                    _createElementVNode("div", _hoisted_1, _toDisplayString(stat.title), 1),
-                                    _createElementVNode("div", _hoisted_2, [
+                                    _createElementVNode("div", _hoisted_3, _toDisplayString(stat.title), 1),
+                                    _createElementVNode("div", _hoisted_4, [
                                       _createVNode(_component_VIcon, {
                                         icon: stat.icon,
                                         size: "24",
@@ -562,7 +588,7 @@ return (_ctx, _cache) => {
                           }, null, 8, ["model-value", "color"]))
                         : _createCommentVNode("", true),
                       (scrapeProgress.current_file)
-                        ? (_openBlock(), _createElementBlock("div", _hoisted_3, [
+                        ? (_openBlock(), _createElementBlock("div", _hoisted_5, [
                             _createVNode(_component_VIcon, {
                               icon: "mdi-file-video",
                               size: "16",
@@ -839,7 +865,7 @@ return (_ctx, _cache) => {
                           _createElementVNode("tbody", null, [
                             (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(scrapeHistory.value, (item, i) => {
                               return (_openBlock(), _createElementBlock("tr", { key: i }, [
-                                _createElementVNode("td", _hoisted_4, _toDisplayString(item.file_name || item.file_path), 1),
+                                _createElementVNode("td", _hoisted_6, _toDisplayString(item.file_name || item.file_path), 1),
                                 _createElementVNode("td", null, [
                                   _createVNode(_component_VChip, {
                                     color: statusColor(item.status),
@@ -852,15 +878,15 @@ return (_ctx, _cache) => {
                                     _: 2
                                   }, 1032, ["color"])
                                 ]),
-                                _createElementVNode("td", _hoisted_5, _toDisplayString(item.duration_ms != null ? (item.duration_ms / 1000).toFixed(1) + 's' : '--'), 1),
-                                _createElementVNode("td", _hoisted_6, _toDisplayString(item.finished_at || '--'), 1),
-                                _createElementVNode("td", _hoisted_7, _toDisplayString(item.danmu_counts?.received != null ? item.danmu_counts.received : '--'), 1),
-                                _createElementVNode("td", _hoisted_8, _toDisplayString(item.danmu_counts?.blocked != null ? item.danmu_counts.blocked : '--'), 1),
-                                _createElementVNode("td", _hoisted_9, _toDisplayString(item.danmu_counts?.actual != null ? item.danmu_counts.actual : '--'), 1),
-                                _createElementVNode("td", _hoisted_10, [
+                                _createElementVNode("td", _hoisted_7, _toDisplayString(item.duration_ms != null ? (item.duration_ms / 1000).toFixed(1) + 's' : '--'), 1),
+                                _createElementVNode("td", _hoisted_8, _toDisplayString(item.finished_at || '--'), 1),
+                                _createElementVNode("td", _hoisted_9, _toDisplayString(item.danmu_counts?.received != null ? item.danmu_counts.received : '--'), 1),
+                                _createElementVNode("td", _hoisted_10, _toDisplayString(item.danmu_counts?.blocked != null ? item.danmu_counts.blocked : '--'), 1),
+                                _createElementVNode("td", _hoisted_11, _toDisplayString(item.danmu_counts?.actual != null ? item.danmu_counts.actual : '--'), 1),
+                                _createElementVNode("td", _hoisted_12, [
                                   (item.output_ass_path)
-                                    ? (_openBlock(), _createElementBlock("span", _hoisted_11, "已生成"))
-                                    : (_openBlock(), _createElementBlock("span", _hoisted_12, "无"))
+                                    ? (_openBlock(), _createElementBlock("span", _hoisted_13, "已生成"))
+                                    : (_openBlock(), _createElementBlock("span", _hoisted_14, "无"))
                                 ])
                               ]))
                             }), 128))
@@ -881,7 +907,7 @@ return (_ctx, _cache) => {
                           _: 1
                         }))
                       : _createCommentVNode("", true),
-                  _createElementVNode("div", _hoisted_13, [
+                  _createElementVNode("div", _hoisted_15, [
                     _createVNode(_component_VSelect, {
                       modelValue: historyPageSize.value,
                       "onUpdate:modelValue": [
@@ -999,6 +1025,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const AppPageScrape = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-6bcf4dbe"]]);
+const AppPageScrape = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-63eb9e08"]]);
 
 export { AppPageScrape as default };

@@ -1369,32 +1369,63 @@ class DanmuCustom(_PluginBase):
                     scraped += 1
         return total, scraped
 
-    def _start_scrape_batch(self, files: List[str], label: str) -> bool:
+    def _start_scrape_batch(self, files: List[str], label: str) -> Dict:
         """把批量刮削提交到后台受控 worker 队列（不在 API 请求线程里执行大批量）。
 
         v3.4.0: 在入队前先用 /match/batch 预匹配，把 comment_id 缓存到 _pre_matched_cache，
         worker 处理时直接消费缓存，避免每文件都走单文件 match（百文件批量时请求数从 100 → 4）。
+
+        返回 dict {
+            "queued": int, "skipped_existing": int,
+            "pre_match": {"total": int, "matched": int, "elapsed": float, "source": str},
+            "started": bool, "label": str,
+        }
         """
         if not files:
             logger.warning(f"没有需要刮削的文件（{label}）")
-            return False
+            return {"queued": 0, "skipped_existing": 0, "pre_match": {
+                "total": 0, "matched": 0, "elapsed": 0.0, "source": "",
+            }, "started": False, "label": label}
         # 1) 预批量匹配：仅对 .strm 之外、无手动映射、且未走 TMDB 路径的文件
         self._pre_matched_cache.clear()
+        pm_total = 0
+        pm_matched = 0
+        pm_elapsed = 0.0
+        pm_source = ""
         try:
+            t0 = time.time()
             self._populate_pre_match_cache(files)
+            pm_elapsed = round(time.time() - t0, 2)
+            pm_matched = len(self._pre_matched_cache)
+            # 从最后一次 _match_batch_with_fallback 调用中无法直接读 source，记录到上下文
+            pm_source = getattr(self, "_last_pre_match_source", "")
         except Exception as e:
             logger.warning(f"[预匹配] 异常（非阻塞）: {e}")
-        # 批量期间延迟写库，结束统一落盘一次（避免每文件 update_config 拖慢 MP）
+        # 2) 批量期间延迟写库，结束统一落盘一次（避免每文件 update_config 拖慢 MP）
         self._retry_save_deferred = True
-        # 扫描时若 .danmu.ass 已存在且 config_hash 未变，默认跳过避免重复跑
+        # 3) 扫描时若 .danmu.ass 已存在且 config_hash 未变，默认跳过避免重复跑
         queued, skipped = self._task_manager.enqueue(files, skip_existing=True)
         started = self._task_manager.start(self._worker_count, on_finish=self._on_batch_finish)
+        # 计算 pm_total: 预匹配时跳过了 .strm + 手动映射，这里给出"理论上能预匹配的文件数"
+        pm_total = self._last_pre_match_total if hasattr(self, "_last_pre_match_total") else 0
         logger.info(
             f"已提交批量刮削（{label}）：入队 {queued} 个，跳过 {skipped} 个已存在产物"
-            + (f"，预匹配命中 {len(self._pre_matched_cache)} 个" if self._pre_matched_cache else "")
+            + (f"，预匹配命中 {pm_matched}/{pm_total} 个（{pm_elapsed}s, 来源={pm_source}）"
+               if pm_total > 0 else "")
             + ("" if started else "（worker 已在运行）")
         )
-        return True
+        return {
+            "queued": queued,
+            "skipped_existing": skipped,
+            "pre_match": {
+                "total": pm_total,
+                "matched": pm_matched,
+                "elapsed": pm_elapsed,
+                "source": pm_source,
+            },
+            "started": started,
+            "label": label,
+        }
 
     def _populate_pre_match_cache(self, files: List[str]) -> None:
         """用 /match/batch 批量预匹配需要单文件 match 的视频，结果写入 _pre_matched_cache。
@@ -1426,7 +1457,10 @@ class DanmuCustom(_PluginBase):
             except Exception as e:
                 logger.debug(f"[预匹配] 构造 VideoInfo 失败 {fp}: {e}")
                 continue
+        # 记录"可参与预匹配"的文件数到实例属性，供 _start_scrape_batch 上报
+        self._last_pre_match_total = len(to_match)
         if not to_match:
+            self._last_pre_match_source = ""
             return
         # 分批每 32 个一次
         BATCH = 32
@@ -1447,6 +1481,7 @@ class DanmuCustom(_PluginBase):
                     cid = str(res["matches"][0]["episodeId"])
                     self._pre_matched_cache[fp] = cid
                     matched += 1
+        self._last_pre_match_source = source
         logger.info(
             f"[预匹配] 完成 {matched}/{len(to_match)} 个（来源={source}），"
             f"加速约 {matched/32:.1f} 倍"
@@ -1510,12 +1545,18 @@ class DanmuCustom(_PluginBase):
         msg = f"已开始刮削，共 {len(files)} 个文件"
         if scraped > 0:
             msg += f"（其中 {scraped} 个已刮削将跳过）"
-        if not self._start_scrape_batch(files, f"目录 {directory_path}"):
+        batch_info = self._start_scrape_batch(files, f"目录 {directory_path}")
+        # 仅当有文件但 worker 已在运行时才算"已在进行中"
+        if files and not batch_info.get("started", False):
             return schemas.Response(success=False, message="已有刮削任务进行中，请稍后再试")
         return schemas.Response(
             success=True,
             message=msg,
-            data={"total": len(files), "skipped_existing": scraped}
+            data={
+                "total": len(files),
+                "skipped_existing": scraped,
+                "pre_match": batch_info["pre_match"],
+            }
         )
 
     def batch_season_scrape(self, directory_path: str = None) -> schemas.Response:
@@ -1590,7 +1631,8 @@ class DanmuCustom(_PluginBase):
                 continue
             all_files.extend(self._collect_media_files(subdir))
         
-        if not self._start_scrape_batch(all_files, f"分季批量 ({len(subdirs)}个子文件夹)"):
+        batch_info = self._start_scrape_batch(all_files, f"分季批量 ({len(subdirs)}个子文件夹)")
+        if all_files and not batch_info.get("started", False):
             return schemas.Response(success=False, message="已有刮削任务进行中，请稍后再试")
         
         msg = f"已开始分季批量刮削，共 {len(subdirs)} 个子文件夹，{total_files} 个文件"
@@ -1604,6 +1646,7 @@ class DanmuCustom(_PluginBase):
                 "subdirectories": len(subdirs),
                 "seasons": season_info,
                 "skipped_dirs": skipped_dirs,
+                "pre_match": batch_info["pre_match"],
             }
         )
 
@@ -1636,12 +1679,17 @@ class DanmuCustom(_PluginBase):
         if expect_skip > 0:
             msg += f"（其中 {expect_skip} 个已刮削将跳过）"
 
-        if not self._start_scrape_batch(files, "全局"):
+        batch_info = self._start_scrape_batch(files, "全局")
+        if files and not batch_info.get("started", False):
             return schemas.Response(success=False, message="已有刮削任务进行中")
         return schemas.Response(
             success=True,
             message=msg,
-            data={"total": len(files), "skipped_existing": expect_skip}
+            data={
+                "total": len(files),
+                "skipped_existing": expect_skip,
+                "pre_match": batch_info["pre_match"],
+            }
         )
     
     @eventmanager.register(EventType.TransferComplete)
