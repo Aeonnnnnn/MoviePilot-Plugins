@@ -16,7 +16,19 @@
           </VAlert>
 
           <VAlert v-if="actionResult" :type="actionResult.type" variant="tonal" closable class="mx-4 mb-2">
-            {{ actionResult.message }}
+            <div class="d-flex align-center flex-wrap" style="gap: 8px">
+              <span>{{ actionResult.message }}</span>
+              <VChip
+                v-if="actionResult.preMatch && actionResult.preMatch.total > 0"
+                :color="actionResult.preMatch.matched > 0 ? 'success' : 'warning'"
+                size="small"
+                variant="elevated"
+                prepend-icon="mdi-rocket-launch"
+              >
+                预匹配 {{ actionResult.preMatch.matched }}/{{ actionResult.preMatch.total }}
+                <span class="ml-1 text-caption">({{ actionResult.preMatch.elapsed }}s{{ actionResult.preMatch.source ? ' · ' + actionResult.preMatch.source : '' }})</span>
+              </VChip>
+            </div>
           </VAlert>
 
           <!-- 任务控制栏（暂停/继续/取消） -->
@@ -522,9 +534,11 @@ const startGlobalScrape = async () => {
   actionResult.value = null
   try {
     const res = await requestGet('/generate_danmu_with_path')
+    const body = unwrapResponse(res) || {}
     actionResult.value = {
       type: res?.success ? 'success' : 'error',
       message: res?.message || '刮削已启动',
+      preMatch: body?.pre_match,
     }
     startPolling()
     setTimeout(refreshStatus, 2000)
@@ -547,9 +561,11 @@ const startDirectoryScrape = async () => {
     const res = await requestGet(`/${endpoint}`, {
       params: { directory_path: directoryPath.value }
     })
+    const body = unwrapResponse(res) || {}
     actionResult.value = {
       type: res?.success ? 'success' : 'error',
       message: res?.message || '刮削已启动',
+      preMatch: body?.pre_match,
     }
     startPolling()
     showDirectoryDialog.value = false
