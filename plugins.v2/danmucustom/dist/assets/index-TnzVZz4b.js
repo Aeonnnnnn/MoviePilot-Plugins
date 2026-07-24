@@ -1,6 +1,6 @@
 import { importShared } from './__federation_fn_import-DE4nw86B.js';
 import Page from './__federation_expose_Page-B3EEeawU.js';
-import Config from './__federation_expose_Config-Dn89HweA.js';
+import Config from './__federation_expose_Config-asBaTXTn.js';
 import Dashboard from './__federation_expose_Dashboard-Cm69bEDz.js';
 import AppPageScrape from './__federation_expose_AppPageScrape-DtP18i0C.js';
 import _sfc_main$1 from './__federation_expose_AppPageFilter-Byh53Wi9.js';
