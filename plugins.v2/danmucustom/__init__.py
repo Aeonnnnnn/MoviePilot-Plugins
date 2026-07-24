@@ -63,7 +63,7 @@ class DanmuCustom(_PluginBase):
     # 主题色
     plugin_color = "#3B5E8E"
     # 插件版本
-    plugin_version = "3.2.0"
+    plugin_version = "3.3.0"
     # 插件作者
     plugin_author = "Aeonnnnnn"
     # 作者主页
@@ -2145,38 +2145,27 @@ class DanmuCustom(_PluginBase):
         logger.info(f"[TMDB匹配] TMDB: id={tmdb_id}, type={media_type_label}, "
                      f"title={media_info.title or '?'}")
 
-        # 3. 用 TMDB ID 去弹弹Play搜索
+        # 3. 用 TMDB ID 去弹弹Play搜索（先官方 v2，失败后中转站 v1 兜底）
         try:
-            tmdb_url = f"{generator.DanmuAPI.BASE_URL}/search/tmdb"
-            payload = {"tmdb_id": tmdb_id, "tmdb_id_type": tmdb_id_type}
+            episode_for_api = 1
             if episode_num:
                 try:
-                    payload["episode"] = int(episode_num)
+                    episode_for_api = int(episode_num)
                 except (ValueError, TypeError):
-                    payload["episode"] = 1
-            else:
-                payload["episode"] = 1
+                    episode_for_api = 1
 
-            logger.info(f"[TMDB匹配] 请求弹弹Play: {tmdb_url} payload={payload}")
-            response = requests.post(
-                tmdb_url,
-                json=payload,
-                headers=generator.DanmuAPI.HEADERS,
-                timeout=generator.DanmuAPI.TIMEOUT
+            logger.info(f"[TMDB匹配] 请求弹弹Play: tmdb_id={tmdb_id} episode={episode_for_api}")
+            result, source = generator.DanmuAPI._search_tmdb_with_fallback(
+                tmdb_id=tmdb_id,
+                episode=episode_for_api,
+                tmdb_id_type=tmdb_id_type,
             )
-
-            if response.status_code == 429:
-                return schemas.Response(success=False, message="弹弹Play API 配额耗尽，请稍后再试")
-
-            if response.status_code != 200:
-                logger.warning(f"[TMDB匹配] 弹弹Play 返回非200: {response.status_code}")
+            if result is None:
                 return schemas.Response(
                     success=False,
-                    message=f"弹弹Play 请求失败 (HTTP {response.status_code})"
+                    message="弹弹Play 官方接口和中转站均不可用，请稍后再试"
                 )
-
-            result = response.json()
-            logger.info(f"[TMDB匹配] 弹弹Play响应: {json.dumps(result, ensure_ascii=False)[:500]}")
+            logger.info(f"[TMDB匹配] 弹弹Play响应 (来源={source}): {json.dumps(result, ensure_ascii=False)[:500]}")
 
             animes = result.get("animes", [])
             if not animes:
