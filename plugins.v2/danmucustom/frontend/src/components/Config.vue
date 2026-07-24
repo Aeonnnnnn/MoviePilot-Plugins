@@ -161,6 +161,16 @@
                 persistent-hint
               />
             </VCol>
+            <VCol cols="12" md="6">
+              <VSelect
+                v-model="form.chConvert"
+                label="弹幕中文转换"
+                :items="chConvertOptions"
+                variant="outlined"
+                hint="由弹弹play 服务端处理；0=保留原始(默认), 1=全部转简体, 2=全部转繁体"
+                persistent-hint
+              />
+            </VCol>
           </VRow>
         </VWindowItem>
 
@@ -461,6 +471,12 @@ const screenAreaOptions = [
   { title: '1/4 屏', value: 'quarter' },
 ]
 
+const chConvertOptions = [
+  { title: '不转换 (保留原始)', value: 0 },
+  { title: '转为简体', value: 1 },
+  { title: '转为繁体', value: 2 },
+]
+
 const defaultForm = {
   enabled: false,
   path: '',
@@ -473,6 +489,7 @@ const defaultForm = {
   onlyFromBili: false,
   useTmdbID: true,
   auto_scrape: true,
+  chConvert: 0,
   enable_retry_task: true,
   screen_area: 'full',
   enable_strm: true,

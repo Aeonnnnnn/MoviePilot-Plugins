@@ -63,7 +63,7 @@ class DanmuCustom(_PluginBase):
     # 主题色
     plugin_color = "#3B5E8E"
     # 插件版本
-    plugin_version = "3.3.0"
+    plugin_version = "3.4.0"
     # 插件作者
     plugin_author = "Aeonnnnnn"
     # 作者主页
@@ -90,6 +90,9 @@ class DanmuCustom(_PluginBase):
     _onlyFromBili = False
     _useTmdbID = True
     _auto_scrape = True
+    _chConvert = 0  # 0=不转换(默认), 1=转简体, 2=转繁体（让弹弹play 服务端处理）
+    # 批量刮削时由 /match/batch 预匹配结果缓存：file_path -> comment_id
+    _pre_matched_cache: Dict[str, str] = {}
     _screen_area = 'full'  # full(全屏), half(半屏), quarter(1/4屏)
     _enable_strm = True  # 是否启用.strm文件刮削
     # 弹幕内容过滤配置
@@ -408,6 +411,7 @@ class DanmuCustom(_PluginBase):
             self._onlyFromBili = config.get("onlyFromBili", False)
             self._useTmdbID = config.get("useTmdbID", True)
             self._auto_scrape = config.get("auto_scrape", False)
+            self._chConvert = config.get("chConvert", 0)
             self._enable_retry_task = config.get("enable_retry_task", True)
             self._screen_area = config.get("screen_area", "full")
             self._enable_strm = config.get("enable_strm", True)
@@ -877,6 +881,7 @@ class DanmuCustom(_PluginBase):
             "onlyFromBili": self._onlyFromBili,
             "useTmdbID": self._useTmdbID,
             "auto_scrape": self._auto_scrape,
+            "chConvert": self._chConvert,
             "enable_retry_task": self._enable_retry_task,
             "screen_area": self._screen_area,
             "enable_strm": self._enable_strm,
@@ -909,6 +914,7 @@ class DanmuCustom(_PluginBase):
             self._onlyFromBili = config.get("onlyFromBili", False)
             self._useTmdbID = config.get("useTmdbID", True)
             self._auto_scrape = config.get("auto_scrape", False)
+            self._chConvert = config.get("chConvert", 0)
             self._enable_retry_task = config.get("enable_retry_task", True)
             self._screen_area = config.get("screen_area", "full")
             self._enable_strm = config.get("enable_strm", True)
@@ -1080,9 +1086,12 @@ class DanmuCustom(_PluginBase):
             "current_file": (state.get("current_files") or [None])[0],
         }
 
-    def generate_danmu(self, file_path: str) -> Optional[Dict]:
+    def generate_danmu(
+        self, file_path: str, pre_matched_comment_id: Optional[str] = None
+    ) -> Optional[Dict]:
         """
         生成弹幕文件（同一文件同时只允许一个刮削，防止并发写坏弹幕文件）
+        :param pre_matched_comment_id: 预批量匹配结果，由 _populate_pre_match_cache 注入，命中后跳过单文件 match
         :param file_path: 视频文件路径
         :return: dict {"result": ..., "counts": {"received","blocked","actual"}}，失败返回 dict with result 为错误信息
         """
@@ -1093,12 +1102,14 @@ class DanmuCustom(_PluginBase):
                 return {"result": "文件正在刮削中，跳过重复请求", "counts": {"received": 0, "blocked": 0, "actual": 0}}
             self._inflight_files.add(norm)
         try:
-            return self._generate_danmu_impl(file_path)
+            return self._generate_danmu_impl(file_path, pre_matched_comment_id)
         finally:
             with self._inflight_lock:
                 self._inflight_files.discard(norm)
 
-    def _generate_danmu_impl(self, file_path: str) -> Optional[Dict]:
+    def _generate_danmu_impl(
+        self, file_path: str, pre_matched_comment_id: Optional[str] = None
+    ) -> Optional[Dict]:
         """弹幕生成核心实现：解析元数据、匹配番剧、调用 DanmuAPI 刮削弹幕、转换并写入文件。
         返回 dict {"result": str_or_none, "counts": {"received","blocked","actual"}}。"""
         meta = MetaInfo(file_path)
@@ -1181,6 +1192,8 @@ class DanmuCustom(_PluginBase):
                 manual_comment_id=manual_comment_id,
                 tmdb_id_type=tmdb_id_type,
                 filter_config=filter_config,
+                ch_convert=self._chConvert,
+                pre_matched_comment_id=pre_matched_comment_id,
             )
             
             # 提取结果和统计
@@ -1357,10 +1370,20 @@ class DanmuCustom(_PluginBase):
         return total, scraped
 
     def _start_scrape_batch(self, files: List[str], label: str) -> bool:
-        """把批量刮削提交到后台受控 worker 队列（不在 API 请求线程里执行大批量）。"""
+        """把批量刮削提交到后台受控 worker 队列（不在 API 请求线程里执行大批量）。
+
+        v3.4.0: 在入队前先用 /match/batch 预匹配，把 comment_id 缓存到 _pre_matched_cache，
+        worker 处理时直接消费缓存，避免每文件都走单文件 match（百文件批量时请求数从 100 → 4）。
+        """
         if not files:
             logger.warning(f"没有需要刮削的文件（{label}）")
             return False
+        # 1) 预批量匹配：仅对 .strm 之外、无手动映射、且未走 TMDB 路径的文件
+        self._pre_matched_cache.clear()
+        try:
+            self._populate_pre_match_cache(files)
+        except Exception as e:
+            logger.warning(f"[预匹配] 异常（非阻塞）: {e}")
         # 批量期间延迟写库，结束统一落盘一次（避免每文件 update_config 拖慢 MP）
         self._retry_save_deferred = True
         # 扫描时若 .danmu.ass 已存在且 config_hash 未变，默认跳过避免重复跑
@@ -1368,9 +1391,66 @@ class DanmuCustom(_PluginBase):
         started = self._task_manager.start(self._worker_count, on_finish=self._on_batch_finish)
         logger.info(
             f"已提交批量刮削（{label}）：入队 {queued} 个，跳过 {skipped} 个已存在产物"
+            + (f"，预匹配命中 {len(self._pre_matched_cache)} 个" if self._pre_matched_cache else "")
             + ("" if started else "（worker 已在运行）")
         )
         return True
+
+    def _populate_pre_match_cache(self, files: List[str]) -> None:
+        """用 /match/batch 批量预匹配需要单文件 match 的视频，结果写入 _pre_matched_cache。
+        跳过：.strm 文件（走 TMDB 路径）、有手动映射的目录。
+        """
+        to_match: List[Tuple[str, generator.VideoInfo]] = []
+        for fp in files:
+            try:
+                # 跳过 .strm
+                if StrmProcessor.is_strm_file(fp):
+                    continue
+                # 跳过有手动映射的目录
+                video_dir = os.path.dirname(fp)
+                manual_mapping = generator.DanmuAPI._load_manual_mapping(video_dir)
+                if manual_mapping:
+                    continue
+                # 构建 VideoInfo（吃单文件 match 同样的 4 个字段）
+                file_size = generator.DanmuAPI.get_file_size(fp)
+                file_hash = generator.DanmuAPI.calculate_md5_of_first_16MB(fp)
+                video_duration = int(generator.DanmuAPI.get_video_duration(fp) or 0)
+                vi = generator.VideoInfo(
+                    file_name=os.path.basename(fp),
+                    file_hash=file_hash,
+                    file_size=file_size,
+                    video_duration=video_duration,
+                    match_mode="hashAndFileName",
+                )
+                to_match.append((fp, vi))
+            except Exception as e:
+                logger.debug(f"[预匹配] 构造 VideoInfo 失败 {fp}: {e}")
+                continue
+        if not to_match:
+            return
+        # 分批每 32 个一次
+        BATCH = 32
+        matched = 0
+        source = ""
+        for i in range(0, len(to_match), BATCH):
+            chunk_paths = [p for p, _ in to_match[i:i + BATCH]]
+            chunk_vis = [v for _, v in to_match[i:i + BATCH]]
+            results, src = generator.DanmuAPI._match_batch_with_fallback(chunk_vis)
+            source = src or source
+            if results is None:
+                logger.warning(
+                    f"[预匹配] 本批 {len(chunk_vis)} 个匹配失败，后续单文件时再回退"
+                )
+                continue
+            for fp, res in zip(chunk_paths, results):
+                if res and res.get("isMatched") and res.get("matches"):
+                    cid = str(res["matches"][0]["episodeId"])
+                    self._pre_matched_cache[fp] = cid
+                    matched += 1
+        logger.info(
+            f"[预匹配] 完成 {matched}/{len(to_match)} 个（来源={source}），"
+            f"加速约 {matched/32:.1f} 倍"
+        )
 
     # ------------------------------------------------------------------
     # 后台任务处理回调与配置指纹（供 DanmuTaskManager 调用）
@@ -1378,7 +1458,9 @@ class DanmuCustom(_PluginBase):
     def _task_process(self, file_path: str) -> Tuple[bool, str, Optional[Dict]]:
         """worker 队列的单文件处理回调：调用 generate_danmu 并返回 (成功, 消息, 弹幕统计)。"""
         try:
-            result = self.generate_danmu(file_path)
+            # 消费预批量匹配缓存（命中则跳过单文件 match）
+            pre_matched = self._pre_matched_cache.pop(file_path, None)
+            result = self.generate_danmu(file_path, pre_matched_comment_id=pre_matched)
             if isinstance(result, dict):
                 msg = result.get("result", "")
                 counts = result.get("counts", {})
@@ -1395,7 +1477,7 @@ class DanmuCustom(_PluginBase):
         return DanmuTaskManager.hash_config(
             self._width, self._height, self._fontsize, self._alpha,
             self._duration, self._screen_area, self._onlyFromBili,
-            self._useTmdbID, self._filter_enabled,
+            self._useTmdbID, self._chConvert, self._filter_enabled,
             self._filter_similarity_threshold, self._filter_similarity_enabled,
             self._filter_blocked_modes, self._filter_freq_window,
             self._filter_freq_max, self._filter_screen_window,

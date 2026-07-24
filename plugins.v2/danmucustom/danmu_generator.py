@@ -191,11 +191,96 @@ class DanmuAPI:
         return None, ""
 
     @classmethod
-    def _try_get_comments_official(cls, comment_id: str, cache_ttl: Optional[int]) -> Optional[Dict]:
-        """调用官方 v2 /comment/{id}（?withRelated=true&chConvert=0）。"""
+    def _try_match_batch_official(cls, video_infos: List["VideoInfo"]) -> Optional[List[Optional[Dict]]]:
+        """官方 v2 /api/v2/match/batch：一次最多 32 个文件，返回与请求一一对应的 results 列表。
+        响应字段是 results（不是单文件版的 matches），每个 item 是 {"success", "isMatched", "matches"}。
+        """
+        if not video_infos:
+            return []
+        if len(video_infos) > 32:
+            logger.warning(
+                f"[match/batch] 官方单次最多 32 个文件，实际 {len(video_infos)}，将被截断"
+            )
+            video_infos = video_infos[:32]
+        try:
+            payload = {
+                "requests": [
+                    {
+                        "fileName": v.file_name,
+                        "fileHash": v.file_hash,
+                        "fileSize": v.file_size,
+                        "videoDuration": v.video_duration,
+                        "matchMode": v.match_mode,
+                    }
+                    for v in video_infos
+                ]
+            }
+            resp = requests.post(
+                f"{cls.BASE_URL_OFFICIAL}/match/batch",
+                json=payload,
+                headers=cls.HEADERS_OFFICIAL,
+                timeout=cls.TIMEOUT,
+            )
+            if resp.status_code == 200:
+                body = resp.json()
+                results = body.get("results") or []
+                # 补齐短结果（API 行为：某项失败可能不返回对应 item）
+                if len(results) < len(video_infos):
+                    results = list(results) + [None] * (len(video_infos) - len(results))
+                return results
+            logger.warning(
+                f"[match/batch] 官方 HTTP {resp.status_code} "
+                f"{resp.headers.get('X-Error-Message', '')}"
+            )
+        except Exception as e:
+            logger.warning(f"[match/batch] 官方异常: {e}")
+        return None
+
+    @classmethod
+    def _try_match_batch_proxy(cls, video_infos: List["VideoInfo"]) -> Optional[List[Optional[Dict]]]:
+        """中转站 v1 没有 batch 接口：循环单文件 /match（最多 32 个），全部成功后返回结果列表。"""
+        if not video_infos:
+            return []
+        results: List[Optional[Dict]] = []
+        try:
+            for v in video_infos:
+                resp = requests.post(
+                    f"{cls.BASE_URL_PROXY}/match",
+                    json=v.__dict__,
+                    headers=cls.HEADERS_PROXY,
+                    timeout=cls.TIMEOUT,
+                )
+                if resp.status_code == 200:
+                    results.append(resp.json())
+                else:
+                    logger.warning(f"[match/batch] 中转站单文件 HTTP {resp.status_code}")
+                    return None
+            return results
+        except Exception as e:
+            logger.warning(f"[match/batch] 中转站异常: {e}")
+        return None
+
+    @classmethod
+    def _match_batch_with_fallback(cls, video_infos: List["VideoInfo"]) -> Tuple[Optional[List[Optional[Dict]]], str]:
+        """批量匹配：先官方 v2 /match/batch，失败/部分失败时中转站 v1 循环兜底。
+        返回 (results 列表, 来源 'official'/'proxy'/'')。"""
+        result = cls._try_match_batch_official(video_infos)
+        if result is not None:
+            return result, "official"
+        result = cls._try_match_batch_proxy(video_infos)
+        if result is not None:
+            return result, "proxy"
+        return None, ""
+
+    @classmethod
+    def _try_get_comments_official(
+        cls, comment_id: str, cache_ttl: Optional[int], ch_convert: int = 0
+    ) -> Optional[Dict]:
+        """调用官方 v2 /comment/{id}（?withRelated=true&chConvert=0/1/2）。
+        :param ch_convert: 0=不转换, 1=转简体, 2=转繁体（弹弹play 服务端处理）"""
         try:
             url = f"{cls.BASE_URL_OFFICIAL}/comment/{comment_id}"
-            params = {"withRelated": "true", "chConvert": 0}
+            params = {"withRelated": "true", "chConvert": ch_convert}
             if cache_ttl is not None:
                 params["cache_ttl"] = cache_ttl
             resp = requests.get(
@@ -215,10 +300,12 @@ class DanmuAPI:
         return None
 
     @classmethod
-    def _try_get_comments_proxy(cls, comment_id: str, cache_ttl: Optional[int]) -> Optional[Dict]:
-        """调用中转站 v1 /{id}（?from_id=0&with_related=true&ch_convert=0）。"""
+    def _try_get_comments_proxy(
+        cls, comment_id: str, cache_ttl: Optional[int], ch_convert: int = 0
+    ) -> Optional[Dict]:
+        """调用中转站 v1 /{id}（?from_id=0&with_related=true&ch_convert=0/1/2）。"""
         try:
-            params = {"from_id": 0, "with_related": "true", "ch_convert": 0}
+            params = {"from_id": 0, "with_related": "true", "ch_convert": ch_convert}
             if cache_ttl is not None:
                 params["cache_ttl"] = cache_ttl
             resp = requests.get(
@@ -235,12 +322,14 @@ class DanmuAPI:
         return None
 
     @classmethod
-    def _get_comments_with_fallback(cls, comment_id: str, cache_ttl: Optional[int]) -> Tuple[Optional[Dict], str]:
+    def _get_comments_with_fallback(
+        cls, comment_id: str, cache_ttl: Optional[int], ch_convert: int = 0
+    ) -> Tuple[Optional[Dict], str]:
         """拉取弹幕：先官方 v2，失败后中转站 v1。返回 (弹幕数据, 来源)。"""
-        result = cls._try_get_comments_official(comment_id, cache_ttl)
+        result = cls._try_get_comments_official(comment_id, cache_ttl, ch_convert)
         if result is not None:
             return result, "official"
-        result = cls._try_get_comments_proxy(comment_id, cache_ttl)
+        result = cls._try_get_comments_proxy(comment_id, cache_ttl, ch_convert)
         if result is not None:
             return result, "proxy"
         return None, ""
@@ -249,13 +338,31 @@ class DanmuAPI:
     def _try_search_tmdb_official(
         cls, tmdb_id: int, episode: Optional[int], tmdb_id_type: int
     ) -> Optional[Dict]:
-        """官方 v2 不支持按 TMDB ID 搜索（/search/tmdb 是 GET + keyword 接口），
-        TMDB ID 匹配场景直接返回 None，让 _search_tmdb_with_fallback 走中转站兜底。
+        """官方 v2 /api/v2/search/episodes 支持 TMDB ID 反查（带 v2=true 走新版搜索引擎）。
+        注意：/api/v2/search/tmdb 只支持 keyword，不支持 tmdbId。
         """
-        logger.debug(
-            f"[search/tmdb] 官方 v2 不支持 TMDB ID 匹配 (tmdb_id={tmdb_id})，"
-            f"将走中转站 v1 兜底"
-        )
+        try:
+            params = {
+                "tmdbId": tmdb_id,
+                "tmdbIdType": tmdb_id_type,
+                "v2": "true",
+            }
+            if episode is not None:
+                params["episode"] = episode
+            resp = requests.get(
+                f"{cls.BASE_URL_OFFICIAL}/search/episodes",
+                params=params,
+                headers=cls.HEADERS_OFFICIAL,
+                timeout=cls.TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            logger.warning(
+                f"[search/episodes?tmdbId] 官方 HTTP {resp.status_code} "
+                f"{resp.headers.get('X-Error-Message', '')}"
+            )
+        except Exception as e:
+            logger.warning(f"[search/episodes?tmdbId] 官方异常: {e}")
         return None
 
     @classmethod
@@ -638,16 +745,22 @@ class DanmuAPI:
             return None
 
     @classmethod
-    def get_comments(cls, comment_id: str, cache_ttl: Optional[int] = None) -> Optional[Dict]:
+    def get_comments(
+        cls,
+        comment_id: str,
+        cache_ttl: Optional[int] = None,
+        ch_convert: int = 0,
+    ) -> Optional[Dict]:
         """
         获取弹幕内容（先官方 v2，失败后中转站 v1 兜底）
         :param comment_id: 弹幕ID
         :param cache_ttl: 缓存时间（分钟），仅中转站接收；官方 v2 客户端自行缓存
+        :param ch_convert: 0=不转换(默认), 1=转简体, 2=转繁体（弹弹play 服务端处理，不消耗本地资源）
         :return: 弹幕数据
         """
-        result, source = cls._get_comments_with_fallback(comment_id, cache_ttl)
+        result, source = cls._get_comments_with_fallback(comment_id, cache_ttl, ch_convert)
         if result is not None:
-            logger.info(f"[get_comments] 来源={source} comment_id={comment_id}")
+            logger.info(f"[get_comments] 来源={source} comment_id={comment_id} ch_convert={ch_convert}")
             return result
         logger.error(f"[get_comments] 官方和中转站均失败: comment_id={comment_id}")
         return None
@@ -1421,21 +1534,28 @@ def danmu_generator(
     manual_comment_id: Optional[str] = None,
     tmdb_id_type: int = 0,
     filter_config: Optional[Dict] = None,
+    ch_convert: int = 0,
+    pre_matched_comment_id: Optional[str] = None,
 ) -> Optional[Dict]:
     """弹幕生成主入口：匹配番剧、获取弹幕、可选过滤、转换 ASS、嵌入视频字幕。
 
-    流程：匹配 comment_id → 获取弹幕 JSON → 可选 DanmakuFilter 过滤 → 转换 ASS → 嵌入视频。
+    流程：预匹配/手动匹配/TMDB 匹配/单文件 match → 获取弹幕 JSON → 可选 DanmakuFilter 过滤 → 转换 ASS → 嵌入视频。
     返回 dict: {"result": str_or_none, "received": int, "blocked": int, "actual": int}，失败时返回 None。
     """
     try:
-        comment_id = manual_comment_id or DanmuAPI.get_comment_id(
-            file_path, use_tmdb_id, tmdb_id, episode, cache_ttl, tmdb_id_type
-        )
+        # 优先级: 预批量匹配 > 手动匹配 > TMDB 匹配 > 单文件 match
+        if pre_matched_comment_id:
+            comment_id = pre_matched_comment_id
+            logger.debug(f"使用预批量匹配 comment_id={comment_id} - {file_path}")
+        else:
+            comment_id = manual_comment_id or DanmuAPI.get_comment_id(
+                file_path, use_tmdb_id, tmdb_id, episode, cache_ttl, tmdb_id_type
+            )
         if not comment_id:
             logger.info(f"未找到对应弹幕 - {file_path}")
             return {"result": "未找到对应弹幕", "received": 0, "blocked": 0, "actual": 0}
 
-        comments_data = DanmuAPI.get_comments(comment_id, cache_ttl=cache_ttl)
+        comments_data = DanmuAPI.get_comments(comment_id, cache_ttl=cache_ttl, ch_convert=ch_convert)
         if not comments_data:
             return {"result": "未获取到弹幕数据", "received": 0, "blocked": 0, "actual": 0}
 

@@ -4,7 +4,7 @@
     "name": "弹幕刮削定制版",
     "description": "基于原版Danmu重构，使用弹弹play平台生成弹幕字幕文件，实现弹幕播放。集成词库管理/封禁用户/持久化配置/七阶段弹幕内容过滤系统，支持批量分季匹配下载，Vue前端页面。",
     "labels": "弹幕,字幕,刮削,过滤",
-    "version": "3.3.0",
+    "version": "3.4.0",
     "v2": true,
     "icon": "https://raw.githubusercontent.com/Aeonnnnnn/MoviePilot-Plugins/main/icons/danmu.png",
     "author": "Aeonnnnnn",
