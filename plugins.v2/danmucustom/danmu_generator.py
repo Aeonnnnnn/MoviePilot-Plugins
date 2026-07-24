@@ -73,16 +73,227 @@ class StrmProcessor:
 
 
 class DanmuAPI:
-    """弹弹Play API 客户端：封装番剧匹配、弹幕获取、手动匹配文件读写等接口。"""
-    BASE_URL = 'https://dandanapi.hankun.online/api/v1'
-    HEADERS = {
-        'Accept': 'application/json',
-        "User-Agent": "Moviepilot/plugins 1.9.0"
+    """弹弹Play API 客户端：封装番剧匹配、弹幕获取、手动匹配文件读写等接口。
+
+    接入策略：官方 v2 接口 (api.dandanplay.net) 为主，中转站 v1 (dandanapi.hankun.online) 兜底。
+    所有外部请求统一通过 *_with_fallback 类方法发起，先官方后中转站，单点失败不影响整体。
+    """
+    # ===== 官方 v2（主）=====
+    BASE_URL_OFFICIAL = "https://api.dandanplay.net/api/v2"
+    # 从 https://dev.dandanplay.com 申请的应用凭证（用户提供）
+    # 一个 AppId 对应两个 AppSecret，任一可用；轮换/失效时编辑此处即可
+    APP_ID = "ucghni9y97"
+    APP_SECRETS = [
+        "itYDA3pkBmFTbyYGjV4FEDrmHD789vZG",
+        "3PxjZcL3kcfeXCXLaWLXQKGeudjrnGL4",
+    ]
+    # 当前选用的 secret 索引（两个之间手动轮换；运行中修改后下次请求生效）
+    _active_secret_idx = 0
+    HEADERS_OFFICIAL = {
+        "Accept": "application/json",
+        "User-Agent": "Moviepilot/plugins 1.9.0",
+        "X-AppId": APP_ID,
+        "X-AppSecret": APP_SECRETS[0],
     }
+
+    # ===== 中转站 v1（兜底）=====
+    BASE_URL_PROXY = "https://dandanapi.hankun.online/api/v1"
+    HEADERS_PROXY = {
+        "Accept": "application/json",
+        "User-Agent": "Moviepilot/plugins 1.9.0",
+    }
+
+    # 兼容旧代码：保留 BASE_URL/HEADERS 名称，默认指向中转站
+    BASE_URL = BASE_URL_PROXY
+    HEADERS = HEADERS_PROXY
+
     MANUAL_MATCH_FILE = ".dandan.anime.json"
     # (connect, read) timeout for all dandan API calls; without this a hung
     # request blocks a worker thread forever and stalls batch scraping
     TIMEOUT = (10, 60)
+
+    @classmethod
+    def _refresh_active_headers(cls) -> None:
+        """根据 _active_secret_idx 重新生成 HEADERS_OFFICIAL，供运行中切换密钥。"""
+        cls.HEADERS_OFFICIAL = {
+            "Accept": "application/json",
+            "User-Agent": "Moviepilot/plugins 1.9.0",
+            "X-AppId": cls.APP_ID,
+            "X-AppSecret": cls.APP_SECRETS[cls._active_secret_idx],
+        }
+
+    @classmethod
+    def rotate_app_secret(cls) -> None:
+        """切换到另一个 AppSecret 并刷新 header。供运维/限流时手动调用。"""
+        cls._active_secret_idx = (cls._active_secret_idx + 1) % len(cls.APP_SECRETS)
+        cls._refresh_active_headers()
+        logger.info(f"[DanmuAPI] 切换到 AppSecret #{cls._active_secret_idx + 1}")
+
+    # ========================================================================
+    # 官方 v2 ↔ 中转站 v1 兜底机制
+    # 三组方法分别对应：match / comment/{id} / search/tmdb 三个外网端点
+    # 公共约定：返回 (result_dict_or_None, source) ，source ∈ {"official", "proxy", ""}
+    # ========================================================================
+
+    @classmethod
+    def _try_match_official(cls, video_info: "VideoInfo") -> Optional[Dict]:
+        """调用官方 v2 /match（camelCase 字段，X-AppId/X-AppSecret 凭证）。"""
+        try:
+            payload = {
+                "fileName": video_info.file_name,
+                "fileHash": video_info.file_hash,
+                "fileSize": video_info.file_size,
+                "videoDuration": video_info.video_duration,
+                "matchMode": video_info.match_mode,
+            }
+            resp = requests.post(
+                f"{cls.BASE_URL_OFFICIAL}/match",
+                json=payload,
+                headers=cls.HEADERS_OFFICIAL,
+                timeout=cls.TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            logger.warning(
+                f"[match] 官方 HTTP {resp.status_code} "
+                f"{resp.headers.get('X-Error-Message', '')}"
+            )
+        except Exception as e:
+            logger.warning(f"[match] 官方异常: {e}")
+        return None
+
+    @classmethod
+    def _try_match_proxy(cls, video_info: "VideoInfo") -> Optional[Dict]:
+        """调用中转站 v1 /match（snake_case 字段，无认证）。"""
+        try:
+            resp = requests.post(
+                f"{cls.BASE_URL_PROXY}/match",
+                json=video_info.__dict__,
+                headers=cls.HEADERS_PROXY,
+                timeout=cls.TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            logger.warning(f"[match] 中转站 HTTP {resp.status_code}")
+        except Exception as e:
+            logger.warning(f"[match] 中转站异常: {e}")
+        return None
+
+    @classmethod
+    def _match_with_fallback(cls, video_info: "VideoInfo") -> Tuple[Optional[Dict], str]:
+        """文件匹配：先官方 v2，失败后中转站 v1。返回 (响应 dict, 来源)。"""
+        result = cls._try_match_official(video_info)
+        if result is not None:
+            return result, "official"
+        result = cls._try_match_proxy(video_info)
+        if result is not None:
+            return result, "proxy"
+        return None, ""
+
+    @classmethod
+    def _try_get_comments_official(cls, comment_id: str, cache_ttl: Optional[int]) -> Optional[Dict]:
+        """调用官方 v2 /comment/{id}（?withRelated=true&chConvert=0）。"""
+        try:
+            url = f"{cls.BASE_URL_OFFICIAL}/comment/{comment_id}"
+            params = {"withRelated": "true", "chConvert": 0}
+            if cache_ttl is not None:
+                params["cache_ttl"] = cache_ttl
+            resp = requests.get(
+                url,
+                params=params,
+                headers=cls.HEADERS_OFFICIAL,
+                timeout=cls.TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            logger.warning(
+                f"[comment] 官方 HTTP {resp.status_code} "
+                f"{resp.headers.get('X-Error-Message', '')}"
+            )
+        except Exception as e:
+            logger.warning(f"[comment] 官方异常: {e}")
+        return None
+
+    @classmethod
+    def _try_get_comments_proxy(cls, comment_id: str, cache_ttl: Optional[int]) -> Optional[Dict]:
+        """调用中转站 v1 /{id}（?from_id=0&with_related=true&ch_convert=0）。"""
+        try:
+            params = {"from_id": 0, "with_related": "true", "ch_convert": 0}
+            if cache_ttl is not None:
+                params["cache_ttl"] = cache_ttl
+            resp = requests.get(
+                f"{cls.BASE_URL_PROXY}/{comment_id}",
+                params=params,
+                headers=cls.HEADERS_PROXY,
+                timeout=cls.TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            logger.warning(f"[comment] 中转站 HTTP {resp.status_code}")
+        except Exception as e:
+            logger.warning(f"[comment] 中转站异常: {e}")
+        return None
+
+    @classmethod
+    def _get_comments_with_fallback(cls, comment_id: str, cache_ttl: Optional[int]) -> Tuple[Optional[Dict], str]:
+        """拉取弹幕：先官方 v2，失败后中转站 v1。返回 (弹幕数据, 来源)。"""
+        result = cls._try_get_comments_official(comment_id, cache_ttl)
+        if result is not None:
+            return result, "official"
+        result = cls._try_get_comments_proxy(comment_id, cache_ttl)
+        if result is not None:
+            return result, "proxy"
+        return None, ""
+
+    @classmethod
+    def _try_search_tmdb_official(
+        cls, tmdb_id: int, episode: Optional[int], tmdb_id_type: int
+    ) -> Optional[Dict]:
+        """官方 v2 不支持按 TMDB ID 搜索（/search/tmdb 是 GET + keyword 接口），
+        TMDB ID 匹配场景直接返回 None，让 _search_tmdb_with_fallback 走中转站兜底。
+        """
+        logger.debug(
+            f"[search/tmdb] 官方 v2 不支持 TMDB ID 匹配 (tmdb_id={tmdb_id})，"
+            f"将走中转站 v1 兜底"
+        )
+        return None
+
+    @classmethod
+    def _try_search_tmdb_proxy(
+        cls, tmdb_id: int, episode: Optional[int], tmdb_id_type: int
+    ) -> Optional[Dict]:
+        """调用中转站 v1 /search/tmdb（snake_case 字段）。"""
+        try:
+            payload = {
+                "tmdb_id": tmdb_id,
+                "tmdb_id_type": tmdb_id_type,
+                "episode": episode if episode is not None else 1,
+            }
+            resp = requests.post(
+                f"{cls.BASE_URL_PROXY}/search/tmdb",
+                json=payload,
+                headers=cls.HEADERS_PROXY,
+                timeout=cls.TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            logger.warning(f"[search/tmdb] 中转站 HTTP {resp.status_code}")
+        except Exception as e:
+            logger.warning(f"[search/tmdb] 中转站异常: {e}")
+        return None
+
+    @classmethod
+    def _search_tmdb_with_fallback(
+        cls, tmdb_id: int, episode: Optional[int], tmdb_id_type: int
+    ) -> Tuple[Optional[Dict], str]:
+        """TMDB 搜索：先官方 v2，失败后中转站 v1。返回 (响应, 来源)。"""
+        result = cls._try_search_tmdb_official(tmdb_id, episode, tmdb_id_type)
+        if result is not None:
+            return result, "official"
+        result = cls._try_search_tmdb_proxy(tmdb_id, episode, tmdb_id_type)
+        if result is not None:
+            return result, "proxy"
+        return None, ""
 
     @classmethod
     def _manual_file_path(cls, directory: str) -> str:
@@ -310,36 +521,25 @@ class DanmuAPI:
     @staticmethod
     def search_by_tmdb_id(tmdb_id: int, episode: Optional[int] = None, tmdb_id_type: int = 0) -> Optional[str]:
         """
-        使用TMDB ID搜索弹幕
+        使用TMDB ID搜索弹幕（先官方 v2，失败后中转站 v1 兜底）
         :param tmdb_id: TMDB ID
         :param episode: 集数
         :param tmdb_id_type: TMDB ID类型，0=电视剧，1=电影
         :return: 弹幕ID
         """
-        try:
-            url = f"{DanmuAPI.BASE_URL}/search/tmdb"
-            data = {
-                "tmdb_id": tmdb_id,
-                "tmdb_id_type": tmdb_id_type
-            }
-            # Server requires episode but ignores it for movies (type=1)
-            if episode is not None:
-                data["episode"] = episode
-            else:
-                data["episode"] = 1
-            response = requests.post(url, json=data, headers=DanmuAPI.HEADERS, timeout=DanmuAPI.TIMEOUT)
-            if response.status_code == 200:
-                result = response.json()
-                if result.get("success") and not result.get("hasMore"):
-                    animes = result.get("animes", [])
-                    if animes and len(animes) > 0:
-                        episodes = animes[0].get("episodes", [])
-                        if episodes and len(episodes) > 0:
-                            return str(episodes[0].get("episodeId"))
+        result, source = DanmuAPI._search_tmdb_with_fallback(tmdb_id, episode, tmdb_id_type)
+        if result is None:
+            logger.error(f"[search_by_tmdb_id] 官方和中转站均失败: tmdb_id={tmdb_id}")
             return None
-        except Exception as e:
-            logger.error(f"使用TMDB ID搜索弹幕失败: {e}")
-            return None
+        # 官方和中转站响应结构基本一致（均含 success / hasMore / animes / episodes）
+        if result.get("success") and not result.get("hasMore"):
+            animes = result.get("animes", [])
+            if animes and len(animes) > 0:
+                episodes = animes[0].get("episodes", [])
+                if episodes and len(episodes) > 0:
+                    logger.info(f"[search_by_tmdb_id] 来源={source} tmdb_id={tmdb_id}")
+                    return str(episodes[0].get("episodeId"))
+        return None
 
     @staticmethod
     def get_comment_id(
@@ -403,13 +603,11 @@ class DanmuAPI:
                     logger.info(f"使用目录手动匹配ID: {manual_comment}")
                     return manual_comment
 
-            # 使用 match API
-            url = f"{DanmuAPI.BASE_URL}/match"
-            response = requests.post(url, json=video_info.__dict__, headers=DanmuAPI.HEADERS, timeout=DanmuAPI.TIMEOUT)
-            if response.status_code == 200:
-                result = response.json()
-                if result.get("isMatched") and result.get("matches"):
-                    return str(result["matches"][0]["episodeId"])
+            # 使用 match API：先官方 v2，失败后中转站 v1 兜底
+            result, source = DanmuAPI._match_with_fallback(video_info)
+            if result is not None and result.get("isMatched") and result.get("matches"):
+                logger.info(f"[get_comment_id] 来源={source} file={os.path.basename(file_path)}")
+                return str(result["matches"][0]["episodeId"])
 
             # 如果使用TMDB ID且提供了TMDB ID，尝试使用TMDB ID匹配
             if use_tmdb_id and tmdb_id is not None:
@@ -442,23 +640,17 @@ class DanmuAPI:
     @classmethod
     def get_comments(cls, comment_id: str, cache_ttl: Optional[int] = None) -> Optional[Dict]:
         """
-        获取弹幕内容
+        获取弹幕内容（先官方 v2，失败后中转站 v1 兜底）
         :param comment_id: 弹幕ID
-        :param cache_ttl: 缓存时间（分钟），传给中转服务器控制缓存
+        :param cache_ttl: 缓存时间（分钟），仅中转站接收；官方 v2 客户端自行缓存
         :return: 弹幕数据
         """
-        try:
-            url = f"{cls.BASE_URL}/{comment_id}?from_id=0&with_related=true&ch_convert=0"
-            if cache_ttl is not None:
-                url += f"&cache_ttl={cache_ttl}"
-            response = requests.get(url, headers=cls.HEADERS, timeout=cls.TIMEOUT)
-            if response.status_code == 200:
-                return response.json()
-            logger.error(f"获取弹幕失败: {response.text}")
-            return None
-        except Exception as e:
-            logger.error(f"获取弹幕失败: {e}")
-            return None
+        result, source = cls._get_comments_with_fallback(comment_id, cache_ttl)
+        if result is not None:
+            logger.info(f"[get_comments] 来源={source} comment_id={comment_id}")
+            return result
+        logger.error(f"[get_comments] 官方和中转站均失败: comment_id={comment_id}")
+        return None
 
 
 class DanmuConverter:
