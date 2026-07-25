@@ -198,7 +198,7 @@
     <!-- 刮削历史对话框 -->
     <VDialog v-model="showHistoryDialog" max-width="1000">
       <VCard>
-        <VCardTitle class="d-flex align-center flex-wrap pa-4" style="gap: 12px;">
+        <div class="d-flex align-center flex-wrap pa-4" style="gap: 12px;">
           <div class="d-flex align-center" style="gap: 8px; min-width: 0; flex: 1 1 auto; overflow: hidden;">
             <span class="text-h6" style="white-space: nowrap;">刮削历史</span>
             <VChip size="small" color="primary" variant="tonal" style="flex-shrink: 0;">{{ historyTotal }}</VChip>
@@ -216,7 +216,7 @@
             />
             <VBtn icon="mdi-close" variant="text" @click="showHistoryDialog = false" />
           </div>
-        </VCardTitle>
+        </div>
         <VDivider />
 
         <VCardText style="overflow-x: auto;">
