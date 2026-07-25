@@ -17,3 +17,12 @@ test_*.py
 
 # 学习参考目录（含嵌套 git 仓库，不作为插件源码分发）
 mp-plugin-study/
+
+# 本地调试与开发脚手架（不随插件分发，仅本地调试/测试用）
+app/
+tests/
+plugins/
+TEST_REPORT.md
+
+# 前端开发模板与学习参考（非插件分发内容）
+moviepilot-plugin-dev/
