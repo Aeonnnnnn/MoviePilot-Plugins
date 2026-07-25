@@ -156,6 +156,7 @@ class DanmuTaskManager:
         process_one: Callable[[str], Tuple[bool, str, Optional[Dict]]],
         compute_config_hash: Callable[[], str],
         default_worker_count: int = 2,
+        find_subtitle: Optional[Callable[[str], Optional[str]]] = None,
     ):
         """
         Args:
@@ -165,6 +166,7 @@ class DanmuTaskManager:
             process_one: 处理单个文件，返回 (是否成功, 消息, 弹幕统计dict)
             compute_config_hash: 计算影响输出的配置 hash
             default_worker_count: 默认 worker 数（建议 2）
+            find_subtitle: 查找视频同名字幕文件的回调，用于判断合并字幕产物是否完整
         """
         self.log = log
         self._save_data = save_data
@@ -172,6 +174,9 @@ class DanmuTaskManager:
         self._process_one = process_one
         self._compute_config_hash = compute_config_hash
         self._default_worker_count = max(1, int(default_worker_count))
+        self._find_subtitle = find_subtitle
+        # 本次刮削是否跳过已存在产物（由 enqueue 透传，worker 预检复用）
+        self._skip_existing = True
 
         self._lock = threading.RLock()
         self._queue: "Queue[str]" = Queue()
@@ -235,11 +240,23 @@ class DanmuTaskManager:
             self.log.exception(f"恢复任务状态失败: {e}")
 
     # ---------------------------------------------------------------- 入队
+    def _merged_ass_path(self, path: str) -> Optional[str]:
+        """若存在同名字幕文件，返回合并后的 .withDanmu.ass 路径，否则 None。"""
+        if not self._find_subtitle:
+            return None
+        sub2 = self._find_subtitle(path)
+        if not sub2:
+            return None
+        return os.path.splitext(sub2)[0] + ".withDanmu.ass"
+
     def enqueue(self, paths: List[str], skip_existing: bool = True) -> Tuple[int, int]:
         """
         批量入队。返回 (实际入队数, 跳过数)。
-        扫描时若 .danmu.ass 已存在且 config_hash 未变，默认跳过避免重复跑。
+        扫描时若 .danmu.ass 与合并字幕(.withDanmu.ass)均已存在且 config_hash 未变，
+        默认跳过避免重复跑。
         """
+        # 记录本次刮削的跳过策略，供 worker 预检复用
+        self._skip_existing = skip_existing
         cfg_hash = self._compute_config_hash()
         queued = 0
         skipped = 0
@@ -261,12 +278,15 @@ class DanmuTaskManager:
             except OSError:
                 pass
             output_ass = f"{os.path.splitext(p)[0]}.danmu.ass"
-            if (skip_existing and os.path.exists(output_ass)
-                    and rec.get("config_hash") == cfg_hash
-                    and rec.get("status") in (STATUS_SUCCESS, STATUS_SKIPPED)):
+            merged_ass = self._merged_ass_path(p)
+            # 存在同名字幕时，合并产物(.withDanmu.ass)也必须存在才算完整
+            merged_ok = os.path.exists(merged_ass) if merged_ass else True
+            if (skip_existing and os.path.exists(output_ass) and merged_ok
+                    and rec.get("config_hash") == cfg_hash):
                 rec["status"] = STATUS_SKIPPED
                 rec["output_ass_path"] = output_ass
                 rec["config_hash"] = cfg_hash
+                rec["error_message"] = None
                 skipped += 1
             else:
                 rec["status"] = STATUS_PENDING
@@ -274,7 +294,6 @@ class DanmuTaskManager:
                 self._queue.put(p)
                 queued += 1
             self._file_status[p] = rec
-
         with self._lock:
             self._running_queue = list(paths)
             self._task_state["skipped"] = skipped
@@ -353,14 +372,28 @@ class DanmuTaskManager:
     def _process_path(self, path: str) -> None:
         output_ass = f"{os.path.splitext(path)[0]}.danmu.ass"
         cfg_hash = self._compute_config_hash()
+        merged_ass = self._merged_ass_path(path)
+        # 存在同名字幕时，合并产物(.withDanmu.ass)也必须存在才算完整
+        merged_ok = os.path.exists(merged_ass) if merged_ass else True
 
-        # 处理前再次判断是否可跳过（config_hash 未变且产物已存在）
         with self._lock:
             rec = self._file_status.get(path) or make_file_record(path)
-            if (os.path.exists(output_ass) and rec.get("config_hash") == cfg_hash
-                    and rec.get("status") in (STATUS_SUCCESS, STATUS_SKIPPED)):
+            # 不跳过模式：清理旧产物（弹幕 .danmu.ass 与合并 .withDanmu.ass），重新下载生成
+            if not self._skip_existing:
+                for old in (output_ass, merged_ass):
+                    if old and os.path.exists(old):
+                        try:
+                            os.remove(old)
+                        except OSError:
+                            pass
+            danmu_exists = os.path.exists(output_ass)
+            merged_exists = os.path.exists(merged_ass) if merged_ass else True
+            # 跳过条件：开启跳过 + 产物完整(.danmu.ass 与合并字幕均存在) + config_hash 未变
+            if (self._skip_existing and danmu_exists and merged_exists
+                    and rec.get("config_hash") == cfg_hash):
                 rec["status"] = STATUS_SKIPPED
                 rec["output_ass_path"] = output_ass
+                rec["error_message"] = None
                 self._file_status[path] = rec
                 self._task_state["skipped"] = self._task_state.get("skipped", 0) + 1
                 self._task_state["processed"] = self._task_state.get("processed", 0) + 1
@@ -386,8 +419,14 @@ class DanmuTaskManager:
         with self._lock:
             rec = self._file_status.get(path) or make_file_record(path)
             rec["finished_at"] = time.time()
-            rec["output_ass_path"] = output_ass if os.path.exists(output_ass) else None
-            rec["output_size"] = os.path.getsize(output_ass) if os.path.exists(output_ass) else None
+            # 仅当本次运行成功（ok）且产物确实写入时才记录输出路径，
+            # 避免运行失败后误把磁盘上历史遗留的 .danmu.ass 当作“已生成”
+            if ok and os.path.exists(output_ass):
+                rec["output_ass_path"] = output_ass
+                rec["output_size"] = os.path.getsize(output_ass)
+            else:
+                rec["output_ass_path"] = None
+                rec["output_size"] = None
             if ok:
                 rec["status"] = STATUS_SUCCESS
                 rec["error_message"] = None

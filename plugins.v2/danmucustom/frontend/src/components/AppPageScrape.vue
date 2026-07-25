@@ -198,21 +198,24 @@
     <!-- 刮削历史对话框 -->
     <VDialog v-model="showHistoryDialog" max-width="1000">
       <VCard>
-        <VCardItem class="d-flex align-center">
-          <VCardTitle>刮削历史</VCardTitle>
-          <VChip size="small" class="ml-2" color="primary" variant="tonal">{{ historyTotal }}</VChip>
-          <VSpacer />
-          <VSelect
-            v-model="historyStatusFilter"
-            :items="historyStatusOptions"
-            label="状态"
-            density="compact"
-            variant="outlined"
-            hide-details
-            style="max-width: 100px"
-            @update:model-value="loadHistory(1)"
-          />
-          <VBtn icon="mdi-close" variant="text" @click="showHistoryDialog = false" />
+        <VCardItem class="d-flex align-center flex-wrap" style="gap: 12px;">
+          <div class="d-flex align-center" style="gap: 8px; min-width: 0; flex: 1 1 auto; overflow: hidden;">
+            <VCardTitle class="text-h6 pa-0" style="white-space: nowrap;">刮削历史</VCardTitle>
+            <VChip size="small" color="primary" variant="tonal" style="flex-shrink: 0;">{{ historyTotal }}</VChip>
+          </div>
+          <div class="d-flex align-center" style="gap: 8px; flex-shrink: 0;">
+            <VSelect
+              v-model="historyStatusFilter"
+              :items="historyStatusOptions"
+              label="状态"
+              density="compact"
+              variant="outlined"
+              hide-details
+              style="width: 120px; max-width: 120px;"
+              @update:model-value="loadHistory(1)"
+            />
+            <VBtn icon="mdi-close" variant="text" @click="showHistoryDialog = false" />
+          </div>
         </VCardItem>
         <VDivider />
 
@@ -314,7 +317,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import {
   mdiMovieOpenStar,
   mdiPlayCircle,
@@ -437,6 +440,11 @@ const loadHistory = async (page = historyPage.value) => {
     scrapeHistory.value = []
   }
 }
+
+// 打开历史弹窗时自动加载数据（首次进入不再需要手动切换筛选）
+watch(showHistoryDialog, (open) => {
+  if (open) loadHistory(1)
+})
 
 const statsCards = computed(() => {
   let statusText = '空闲'

@@ -19,26 +19,34 @@ const _hoisted_5 = {
   class: "mt-2 text-body-2 text-medium-emphasis"
 };
 const _hoisted_6 = {
+  class: "d-flex align-center",
+  style: {"gap":"8px","min-width":"0","flex":"1 1 auto","overflow":"hidden"}
+};
+const _hoisted_7 = {
+  class: "d-flex align-center",
+  style: {"gap":"8px","flex-shrink":"0"}
+};
+const _hoisted_8 = {
   class: "text-body-2",
   style: {"max-width":"320px","overflow":"hidden","text-overflow":"ellipsis","white-space":"nowrap"}
 };
-const _hoisted_7 = { class: "text-caption" };
-const _hoisted_8 = { class: "text-caption" };
-const _hoisted_9 = { class: "text-caption text-center" };
-const _hoisted_10 = { class: "text-caption text-center" };
+const _hoisted_9 = { class: "text-caption" };
+const _hoisted_10 = { class: "text-caption" };
 const _hoisted_11 = { class: "text-caption text-center" };
-const _hoisted_12 = { class: "text-caption" };
-const _hoisted_13 = {
+const _hoisted_12 = { class: "text-caption text-center" };
+const _hoisted_13 = { class: "text-caption text-center" };
+const _hoisted_14 = { class: "text-caption" };
+const _hoisted_15 = {
   key: 0,
   class: "text-success"
 };
-const _hoisted_14 = {
+const _hoisted_16 = {
   key: 1,
   class: "text-error"
 };
-const _hoisted_15 = { class: "d-flex justify-center mt-3" };
+const _hoisted_17 = { class: "d-flex justify-center mt-3" };
 
-const {ref,reactive,computed,onMounted} = await importShared('vue');
+const {ref,reactive,computed,onMounted,watch} = await importShared('vue');
 
 const API_PLUGIN_ID = 'DanmuCustom';
 
@@ -143,6 +151,11 @@ const loadHistory = async (page = historyPage.value) => {
     scrapeHistory.value = [];
   }
 };
+
+// 打开历史弹窗时自动加载数据（首次进入不再需要手动切换筛选）
+watch(showHistoryDialog, (open) => {
+  if (open) loadHistory(1);
+});
 
 const statsCards = computed(() => {
   let statusText = '空闲';
@@ -793,44 +806,53 @@ return (_ctx, _cache) => {
         default: _withCtx(() => [
           _createVNode(_component_VCard, null, {
             default: _withCtx(() => [
-              _createVNode(_component_VCardItem, { class: "d-flex align-center" }, {
+              _createVNode(_component_VCardItem, {
+                class: "d-flex align-center flex-wrap",
+                style: {"gap":"12px"}
+              }, {
                 default: _withCtx(() => [
-                  _createVNode(_component_VCardTitle, null, {
-                    default: _withCtx(() => [...(_cache[27] || (_cache[27] = [
-                      _createTextVNode("刮削历史", -1)
-                    ]))]),
-                    _: 1
-                  }),
-                  _createVNode(_component_VChip, {
-                    size: "small",
-                    class: "ml-2",
-                    color: "primary",
-                    variant: "tonal"
-                  }, {
-                    default: _withCtx(() => [
-                      _createTextVNode(_toDisplayString(historyTotal.value), 1)
-                    ]),
-                    _: 1
-                  }),
-                  _createVNode(_component_VSpacer),
-                  _createVNode(_component_VSelect, {
-                    modelValue: historyStatusFilter.value,
-                    "onUpdate:modelValue": [
-                      _cache[5] || (_cache[5] = $event => ((historyStatusFilter).value = $event)),
-                      _cache[6] || (_cache[6] = $event => (loadHistory(1)))
-                    ],
-                    items: historyStatusOptions,
-                    label: "状态",
-                    density: "compact",
-                    variant: "outlined",
-                    "hide-details": "",
-                    style: {"max-width":"100px"}
-                  }, null, 8, ["modelValue"]),
-                  _createVNode(_component_VBtn, {
-                    icon: "mdi-close",
-                    variant: "text",
-                    onClick: _cache[7] || (_cache[7] = $event => (showHistoryDialog.value = false))
-                  })
+                  _createElementVNode("div", _hoisted_6, [
+                    _createVNode(_component_VCardTitle, {
+                      class: "text-h6 pa-0",
+                      style: {"white-space":"nowrap"}
+                    }, {
+                      default: _withCtx(() => [...(_cache[27] || (_cache[27] = [
+                        _createTextVNode("刮削历史", -1)
+                      ]))]),
+                      _: 1
+                    }),
+                    _createVNode(_component_VChip, {
+                      size: "small",
+                      color: "primary",
+                      variant: "tonal",
+                      style: {"flex-shrink":"0"}
+                    }, {
+                      default: _withCtx(() => [
+                        _createTextVNode(_toDisplayString(historyTotal.value), 1)
+                      ]),
+                      _: 1
+                    })
+                  ]),
+                  _createElementVNode("div", _hoisted_7, [
+                    _createVNode(_component_VSelect, {
+                      modelValue: historyStatusFilter.value,
+                      "onUpdate:modelValue": [
+                        _cache[5] || (_cache[5] = $event => ((historyStatusFilter).value = $event)),
+                        _cache[6] || (_cache[6] = $event => (loadHistory(1)))
+                      ],
+                      items: historyStatusOptions,
+                      label: "状态",
+                      density: "compact",
+                      variant: "outlined",
+                      "hide-details": "",
+                      style: {"width":"120px","max-width":"120px"}
+                    }, null, 8, ["modelValue"]),
+                    _createVNode(_component_VBtn, {
+                      icon: "mdi-close",
+                      variant: "text",
+                      onClick: _cache[7] || (_cache[7] = $event => (showHistoryDialog.value = false))
+                    })
+                  ])
                 ]),
                 _: 1
               }),
@@ -872,7 +894,7 @@ return (_ctx, _cache) => {
                           _createElementVNode("tbody", null, [
                             (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(scrapeHistory.value, (item, i) => {
                               return (_openBlock(), _createElementBlock("tr", { key: i }, [
-                                _createElementVNode("td", _hoisted_6, _toDisplayString(item.file_name || item.file_path), 1),
+                                _createElementVNode("td", _hoisted_8, _toDisplayString(item.file_name || item.file_path), 1),
                                 _createElementVNode("td", null, [
                                   _createVNode(_component_VChip, {
                                     color: statusColor(item.status),
@@ -885,15 +907,15 @@ return (_ctx, _cache) => {
                                     _: 2
                                   }, 1032, ["color"])
                                 ]),
-                                _createElementVNode("td", _hoisted_7, _toDisplayString(item.duration_ms != null ? (item.duration_ms / 1000).toFixed(1) + 's' : '--'), 1),
-                                _createElementVNode("td", _hoisted_8, _toDisplayString(item.finished_at || '--'), 1),
-                                _createElementVNode("td", _hoisted_9, _toDisplayString(item.danmu_counts?.received != null ? item.danmu_counts.received : '--'), 1),
-                                _createElementVNode("td", _hoisted_10, _toDisplayString(item.danmu_counts?.blocked != null ? item.danmu_counts.blocked : '--'), 1),
-                                _createElementVNode("td", _hoisted_11, _toDisplayString(item.danmu_counts?.actual != null ? item.danmu_counts.actual : '--'), 1),
-                                _createElementVNode("td", _hoisted_12, [
+                                _createElementVNode("td", _hoisted_9, _toDisplayString(item.duration_ms != null ? (item.duration_ms / 1000).toFixed(1) + 's' : '--'), 1),
+                                _createElementVNode("td", _hoisted_10, _toDisplayString(item.finished_at || '--'), 1),
+                                _createElementVNode("td", _hoisted_11, _toDisplayString(item.danmu_counts?.received != null ? item.danmu_counts.received : '--'), 1),
+                                _createElementVNode("td", _hoisted_12, _toDisplayString(item.danmu_counts?.blocked != null ? item.danmu_counts.blocked : '--'), 1),
+                                _createElementVNode("td", _hoisted_13, _toDisplayString(item.danmu_counts?.actual != null ? item.danmu_counts.actual : '--'), 1),
+                                _createElementVNode("td", _hoisted_14, [
                                   (item.output_ass_path)
-                                    ? (_openBlock(), _createElementBlock("span", _hoisted_13, "已生成"))
-                                    : (_openBlock(), _createElementBlock("span", _hoisted_14, "无"))
+                                    ? (_openBlock(), _createElementBlock("span", _hoisted_15, "已生成"))
+                                    : (_openBlock(), _createElementBlock("span", _hoisted_16, "无"))
                                 ])
                               ]))
                             }), 128))
@@ -914,7 +936,7 @@ return (_ctx, _cache) => {
                           _: 1
                         }))
                       : _createCommentVNode("", true),
-                  _createElementVNode("div", _hoisted_15, [
+                  _createElementVNode("div", _hoisted_17, [
                     _createVNode(_component_VSelect, {
                       modelValue: historyPageSize.value,
                       "onUpdate:modelValue": [
@@ -1032,6 +1054,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const AppPageScrape = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-2a9f7373"]]);
+const AppPageScrape = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-f84acc76"]]);
 
 export { AppPageScrape as default };
