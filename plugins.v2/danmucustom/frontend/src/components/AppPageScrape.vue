@@ -489,6 +489,7 @@ const batchMode = ref(false)
 
 // 轮询定时器
 let pollingTimer = null
+let initiating = false
 
 const startPolling = () => {
   stopPolling()
@@ -515,7 +516,7 @@ const refreshStatus = async () => {
     scrapeProgress.skipped = statusData?.skipped || 0
     scrapeProgress.current_file = statusData?.current_file || ''
     // 如果任务结束（非 running / paused），停止轮询
-    if (!scrapeProgress.running && !scrapeProgress.paused) {
+    if (!scrapeProgress.running && !scrapeProgress.paused && !initiating) {
       stopPolling()
     }
   } catch (err) {
@@ -532,6 +533,8 @@ const refreshStatus = async () => {
 const startGlobalScrape = async () => {
   actionLoading.value = 'global'
   actionResult.value = null
+  initiating = true
+  startPolling()
   try {
     const res = await requestGet('/generate_danmu_with_path')
     const body = unwrapResponse(res) || {}
@@ -540,11 +543,11 @@ const startGlobalScrape = async () => {
       message: res?.message || '刮削已启动',
       preMatch: body?.pre_match,
     }
-    startPolling()
-    setTimeout(refreshStatus, 2000)
+    refreshStatus()
   } catch (err) {
     actionResult.value = { type: 'error', message: err?.response?.status === 404 || err?.status === 404 ? '插件未启用，请先在插件配置中启用插件并保存。' : `请求失败: ${err.message}` }
   } finally {
+    initiating = false
     actionLoading.value = null
   }
 }
@@ -556,6 +559,8 @@ const startDirectoryScrape = async () => {
   }
   actionLoading.value = 'dir'
   actionResult.value = null
+  initiating = true
+  startPolling()
   try {
     const endpoint = batchMode.value ? 'batch_season_scrape' : 'scrape_directory'
     const res = await requestGet(`/${endpoint}`, {
@@ -567,12 +572,12 @@ const startDirectoryScrape = async () => {
       message: res?.message || '刮削已启动',
       preMatch: body?.pre_match,
     }
-    startPolling()
     showDirectoryDialog.value = false
-    setTimeout(refreshStatus, 2000)
+    refreshStatus()
   } catch (err) {
     actionResult.value = { type: 'error', message: err?.response?.status === 404 || err?.status === 404 ? '插件未启用，请先在插件配置中启用插件并保存。' : `请求失败: ${err.message}` }
   } finally {
+    initiating = false
     actionLoading.value = null
   }
 }
@@ -641,7 +646,9 @@ const taskCancel = async () => {
 }
 
 onMounted(() => {
-  refreshStatus()
+  refreshStatus().then(() => {
+    if (scrapeProgress.running || scrapeProgress.paused) startPolling()
+  })
 })
 </script>
 
