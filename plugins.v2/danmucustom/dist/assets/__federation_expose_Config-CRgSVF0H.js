@@ -79,6 +79,8 @@ const defaultForm = {
   auto_scrape: true,
   chConvert: 0,
   enable_retry_task: true,
+  max_retry_times: 3,
+  max_retry_per_run: 50,
   screen_area: 'full',
   enable_strm: true,
   filter_enabled: true,
@@ -166,9 +168,9 @@ return (_ctx, _cache) => {
   const _component_VSwitch = _resolveComponent("VSwitch");
   const _component_VCol = _resolveComponent("VCol");
   const _component_VTextarea = _resolveComponent("VTextarea");
+  const _component_VTextField = _resolveComponent("VTextField");
   const _component_VRow = _resolveComponent("VRow");
   const _component_VWindowItem = _resolveComponent("VWindowItem");
-  const _component_VTextField = _resolveComponent("VTextField");
   const _component_VSelect = _resolveComponent("VSelect");
   const _component_VCheckbox = _resolveComponent("VCheckbox");
   const _component_VTooltip = _resolveComponent("VTooltip");
@@ -194,13 +196,13 @@ return (_ctx, _cache) => {
         ]),
         default: _withCtx(() => [
           _createVNode(_component_VCardTitle, null, {
-            default: _withCtx(() => [...(_cache[34] || (_cache[34] = [
+            default: _withCtx(() => [...(_cache[36] || (_cache[36] = [
               _createTextVNode("插件配置", -1)
             ]))]),
             _: 1
           }),
           _createVNode(_component_VCardSubtitle, null, {
-            default: _withCtx(() => [...(_cache[35] || (_cache[35] = [
+            default: _withCtx(() => [...(_cache[37] || (_cache[37] = [
               _createTextVNode("弹幕刮削参数设置", -1)
             ]))]),
             _: 1
@@ -230,7 +232,7 @@ return (_ctx, _cache) => {
             closable: "",
             class: "mx-4 mb-2"
           }, {
-            default: _withCtx(() => [...(_cache[36] || (_cache[36] = [
+            default: _withCtx(() => [...(_cache[38] || (_cache[38] = [
               _createTextVNode(" 配置已保存 ", -1)
             ]))]),
             _: 1
@@ -245,31 +247,31 @@ return (_ctx, _cache) => {
           }, {
             default: _withCtx(() => [
               _createVNode(_component_VTab, { value: "basic" }, {
-                default: _withCtx(() => [...(_cache[37] || (_cache[37] = [
+                default: _withCtx(() => [...(_cache[39] || (_cache[39] = [
                   _createTextVNode("基本设置", -1)
                 ]))]),
                 _: 1
               }),
               _createVNode(_component_VTab, { value: "display" }, {
-                default: _withCtx(() => [...(_cache[38] || (_cache[38] = [
+                default: _withCtx(() => [...(_cache[40] || (_cache[40] = [
                   _createTextVNode("显示参数", -1)
                 ]))]),
                 _: 1
               }),
               _createVNode(_component_VTab, { value: "filter" }, {
-                default: _withCtx(() => [...(_cache[39] || (_cache[39] = [
+                default: _withCtx(() => [...(_cache[41] || (_cache[41] = [
                   _createTextVNode("过滤设置", -1)
                 ]))]),
                 _: 1
               }),
               _createVNode(_component_VTab, { value: "dictionary" }, {
-                default: _withCtx(() => [...(_cache[40] || (_cache[40] = [
+                default: _withCtx(() => [...(_cache[42] || (_cache[42] = [
                   _createTextVNode("词库管理", -1)
                 ]))]),
                 _: 1
               }),
               _createVNode(_component_VTab, { value: "advanced" }, {
-                default: _withCtx(() => [...(_cache[41] || (_cache[41] = [
+                default: _withCtx(() => [...(_cache[43] || (_cache[43] = [
                   _createTextVNode("高级选项", -1)
                 ]))]),
                 _: 1
@@ -280,7 +282,7 @@ return (_ctx, _cache) => {
           _createVNode(_component_VDivider, { class: "mb-4" }),
           _createVNode(_component_VWindow, {
             modelValue: configTab.value,
-            "onUpdate:modelValue": _cache[33] || (_cache[33] = $event => ((configTab).value = $event))
+            "onUpdate:modelValue": _cache[35] || (_cache[35] = $event => ((configTab).value = $event))
           }, {
             default: _withCtx(() => [
               _createVNode(_component_VWindowItem, { value: "basic" }, {
@@ -341,11 +343,49 @@ return (_ctx, _cache) => {
                         ]),
                         _: 1
                       }),
+                      _createVNode(_component_VCol, {
+                        cols: "12",
+                        md: "6"
+                      }, {
+                        default: _withCtx(() => [
+                          _createVNode(_component_VTextField, {
+                            modelValue: form.max_retry_times,
+                            "onUpdate:modelValue": _cache[5] || (_cache[5] = $event => ((form.max_retry_times) = $event)),
+                            modelModifiers: { number: true },
+                            label: "最大重试次数",
+                            type: "number",
+                            variant: "outlined",
+                            density: "compact",
+                            hint: "单个文件最多被重试的次数（默认 3）",
+                            "persistent-hint": ""
+                          }, null, 8, ["modelValue"])
+                        ]),
+                        _: 1
+                      }),
+                      _createVNode(_component_VCol, {
+                        cols: "12",
+                        md: "6"
+                      }, {
+                        default: _withCtx(() => [
+                          _createVNode(_component_VTextField, {
+                            modelValue: form.max_retry_per_run,
+                            "onUpdate:modelValue": _cache[6] || (_cache[6] = $event => ((form.max_retry_per_run) = $event)),
+                            modelModifiers: { number: true },
+                            label: "单次处理上限",
+                            type: "number",
+                            variant: "outlined",
+                            density: "compact",
+                            hint: "每次定时任务最多处理 N 个重试文件（默认 50）",
+                            "persistent-hint": ""
+                          }, null, 8, ["modelValue"])
+                        ]),
+                        _: 1
+                      }),
                       _createVNode(_component_VCol, { cols: "12" }, {
                         default: _withCtx(() => [
                           _createVNode(_component_VSwitch, {
                             modelValue: form.enable_strm,
-                            "onUpdate:modelValue": _cache[5] || (_cache[5] = $event => ((form.enable_strm) = $event)),
+                            "onUpdate:modelValue": _cache[7] || (_cache[7] = $event => ((form.enable_strm) = $event)),
                             label: "启用 .strm 文件刮削",
                             color: "primary",
                             hint: "对 .strm 流媒体文件也进行弹幕刮削",
@@ -371,7 +411,7 @@ return (_ctx, _cache) => {
                         default: _withCtx(() => [
                           _createVNode(_component_VTextField, {
                             modelValue: form.width,
-                            "onUpdate:modelValue": _cache[6] || (_cache[6] = $event => ((form.width) = $event)),
+                            "onUpdate:modelValue": _cache[8] || (_cache[8] = $event => ((form.width) = $event)),
                             modelModifiers: { number: true },
                             label: "宽度",
                             type: "number",
@@ -389,7 +429,7 @@ return (_ctx, _cache) => {
                         default: _withCtx(() => [
                           _createVNode(_component_VTextField, {
                             modelValue: form.height,
-                            "onUpdate:modelValue": _cache[7] || (_cache[7] = $event => ((form.height) = $event)),
+                            "onUpdate:modelValue": _cache[9] || (_cache[9] = $event => ((form.height) = $event)),
                             modelModifiers: { number: true },
                             label: "高度",
                             type: "number",
@@ -407,7 +447,7 @@ return (_ctx, _cache) => {
                         default: _withCtx(() => [
                           _createVNode(_component_VTextField, {
                             modelValue: form.fontsize,
-                            "onUpdate:modelValue": _cache[8] || (_cache[8] = $event => ((form.fontsize) = $event)),
+                            "onUpdate:modelValue": _cache[10] || (_cache[10] = $event => ((form.fontsize) = $event)),
                             modelModifiers: { number: true },
                             label: "字号",
                             type: "number",
@@ -424,7 +464,7 @@ return (_ctx, _cache) => {
                         default: _withCtx(() => [
                           _createVNode(_component_VTextField, {
                             modelValue: form.alpha,
-                            "onUpdate:modelValue": _cache[9] || (_cache[9] = $event => ((form.alpha) = $event)),
+                            "onUpdate:modelValue": _cache[11] || (_cache[11] = $event => ((form.alpha) = $event)),
                             modelModifiers: { number: true },
                             label: "透明度",
                             type: "number",
@@ -445,7 +485,7 @@ return (_ctx, _cache) => {
                         default: _withCtx(() => [
                           _createVNode(_component_VTextField, {
                             modelValue: form.duration,
-                            "onUpdate:modelValue": _cache[10] || (_cache[10] = $event => ((form.duration) = $event)),
+                            "onUpdate:modelValue": _cache[12] || (_cache[12] = $event => ((form.duration) = $event)),
                             modelModifiers: { number: true },
                             label: "持续时间",
                             type: "number",
@@ -462,7 +502,7 @@ return (_ctx, _cache) => {
                         default: _withCtx(() => [
                           _createVNode(_component_VSelect, {
                             modelValue: form.screen_area,
-                            "onUpdate:modelValue": _cache[11] || (_cache[11] = $event => ((form.screen_area) = $event)),
+                            "onUpdate:modelValue": _cache[13] || (_cache[13] = $event => ((form.screen_area) = $event)),
                             label: "屏幕区域",
                             items: screenAreaOptions,
                             variant: "outlined"
@@ -477,7 +517,7 @@ return (_ctx, _cache) => {
                         default: _withCtx(() => [
                           _createVNode(_component_VSwitch, {
                             modelValue: form.onlyFromBili,
-                            "onUpdate:modelValue": _cache[12] || (_cache[12] = $event => ((form.onlyFromBili) = $event)),
+                            "onUpdate:modelValue": _cache[14] || (_cache[14] = $event => ((form.onlyFromBili) = $event)),
                             label: "仅使用B站弹幕",
                             color: "primary",
                             hint: "只使用来自Bilibili的弹幕源",
@@ -490,7 +530,7 @@ return (_ctx, _cache) => {
                         default: _withCtx(() => [
                           _createVNode(_component_VSwitch, {
                             modelValue: form.useTmdbID,
-                            "onUpdate:modelValue": _cache[13] || (_cache[13] = $event => ((form.useTmdbID) = $event)),
+                            "onUpdate:modelValue": _cache[15] || (_cache[15] = $event => ((form.useTmdbID) = $event)),
                             label: "使用TMDB ID匹配",
                             color: "primary",
                             hint: "优先使用TMDB ID进行番剧匹配",
@@ -506,7 +546,7 @@ return (_ctx, _cache) => {
                         default: _withCtx(() => [
                           _createVNode(_component_VSelect, {
                             modelValue: form.chConvert,
-                            "onUpdate:modelValue": _cache[14] || (_cache[14] = $event => ((form.chConvert) = $event)),
+                            "onUpdate:modelValue": _cache[16] || (_cache[16] = $event => ((form.chConvert) = $event)),
                             label: "弹幕中文转换",
                             items: chConvertOptions,
                             variant: "outlined",
@@ -530,7 +570,7 @@ return (_ctx, _cache) => {
                         default: _withCtx(() => [
                           _createVNode(_component_VSwitch, {
                             modelValue: form.filter_enabled,
-                            "onUpdate:modelValue": _cache[15] || (_cache[15] = $event => ((form.filter_enabled) = $event)),
+                            "onUpdate:modelValue": _cache[17] || (_cache[17] = $event => ((form.filter_enabled) = $event)),
                             label: "启用弹幕内容过滤",
                             color: "primary",
                             class: "mb-4"
@@ -548,7 +588,7 @@ return (_ctx, _cache) => {
                                   icon: "mdi-information",
                                   class: "mb-2"
                                 }, {
-                                  default: _withCtx(() => [...(_cache[42] || (_cache[42] = [
+                                  default: _withCtx(() => [...(_cache[44] || (_cache[44] = [
                                     _createTextVNode(" 分类屏蔽词库和关键词维护、已封禁用户管理请前往「词库管理」页签操作，或通过左侧栏「弹幕过滤」页面操作。 ", -1)
                                   ]))]),
                                   _: 1
@@ -558,52 +598,52 @@ return (_ctx, _cache) => {
                             }),
                             _createVNode(_component_VCol, { cols: "12" }, {
                               default: _withCtx(() => [
-                                _cache[43] || (_cache[43] = _createElementVNode("div", { class: "text-subtitle-2 font-weight-bold mb-2" }, "屏蔽弹幕模式", -1)),
+                                _cache[45] || (_cache[45] = _createElementVNode("div", { class: "text-subtitle-2 font-weight-bold mb-2" }, "屏蔽弹幕模式", -1)),
                                 _createVNode(_component_VCheckbox, {
                                   modelValue: form.filter_blocked_modes,
-                                  "onUpdate:modelValue": _cache[16] || (_cache[16] = $event => ((form.filter_blocked_modes) = $event)),
+                                  "onUpdate:modelValue": _cache[18] || (_cache[18] = $event => ((form.filter_blocked_modes) = $event)),
                                   label: "顶部弹幕",
                                   value: "top",
                                   color: "primary"
                                 }, null, 8, ["modelValue"]),
                                 _createVNode(_component_VCheckbox, {
                                   modelValue: form.filter_blocked_modes,
-                                  "onUpdate:modelValue": _cache[17] || (_cache[17] = $event => ((form.filter_blocked_modes) = $event)),
+                                  "onUpdate:modelValue": _cache[19] || (_cache[19] = $event => ((form.filter_blocked_modes) = $event)),
                                   label: "底部弹幕",
                                   value: "bottom",
                                   color: "primary"
                                 }, null, 8, ["modelValue"]),
                                 _createVNode(_component_VCheckbox, {
                                   modelValue: form.filter_blocked_modes,
-                                  "onUpdate:modelValue": _cache[18] || (_cache[18] = $event => ((form.filter_blocked_modes) = $event)),
+                                  "onUpdate:modelValue": _cache[20] || (_cache[20] = $event => ((form.filter_blocked_modes) = $event)),
                                   label: "滚动弹幕",
                                   value: "scroll",
                                   color: "primary"
                                 }, null, 8, ["modelValue"]),
                                 _createVNode(_component_VCheckbox, {
                                   modelValue: form.filter_blocked_modes,
-                                  "onUpdate:modelValue": _cache[19] || (_cache[19] = $event => ((form.filter_blocked_modes) = $event)),
+                                  "onUpdate:modelValue": _cache[21] || (_cache[21] = $event => ((form.filter_blocked_modes) = $event)),
                                   label: "逆向弹幕",
                                   value: "reverse",
                                   color: "primary"
                                 }, null, 8, ["modelValue"]),
                                 _createVNode(_component_VCheckbox, {
                                   modelValue: form.filter_blocked_modes,
-                                  "onUpdate:modelValue": _cache[20] || (_cache[20] = $event => ((form.filter_blocked_modes) = $event)),
+                                  "onUpdate:modelValue": _cache[22] || (_cache[22] = $event => ((form.filter_blocked_modes) = $event)),
                                   label: "精准定位",
                                   value: "position",
                                   color: "primary"
                                 }, null, 8, ["modelValue"]),
                                 _createVNode(_component_VCheckbox, {
                                   modelValue: form.filter_blocked_modes,
-                                  "onUpdate:modelValue": _cache[21] || (_cache[21] = $event => ((form.filter_blocked_modes) = $event)),
+                                  "onUpdate:modelValue": _cache[23] || (_cache[23] = $event => ((form.filter_blocked_modes) = $event)),
                                   label: "高级弹幕",
                                   value: "advanced",
                                   color: "primary"
                                 }, null, 8, ["modelValue"]),
                                 _createVNode(_component_VCheckbox, {
                                   modelValue: form.filter_blocked_modes,
-                                  "onUpdate:modelValue": _cache[22] || (_cache[22] = $event => ((form.filter_blocked_modes) = $event)),
+                                  "onUpdate:modelValue": _cache[24] || (_cache[24] = $event => ((form.filter_blocked_modes) = $event)),
                                   label: "代码弹幕",
                                   value: "code",
                                   color: "primary"
@@ -613,7 +653,7 @@ return (_ctx, _cache) => {
                             }),
                             _createVNode(_component_VDivider, { class: "my-3" }),
                             _createVNode(_component_VCol, { cols: "12" }, {
-                              default: _withCtx(() => [...(_cache[44] || (_cache[44] = [
+                              default: _withCtx(() => [...(_cache[46] || (_cache[46] = [
                                 _createElementVNode("div", { class: "text-subtitle-2 font-weight-bold mb-2" }, "相似弹幕过滤", -1)
                               ]))]),
                               _: 1
@@ -625,7 +665,7 @@ return (_ctx, _cache) => {
                               default: _withCtx(() => [
                                 _createVNode(_component_VSwitch, {
                                   modelValue: form.filter_similarity_enabled,
-                                  "onUpdate:modelValue": _cache[23] || (_cache[23] = $event => ((form.filter_similarity_enabled) = $event)),
+                                  "onUpdate:modelValue": _cache[25] || (_cache[25] = $event => ((form.filter_similarity_enabled) = $event)),
                                   label: "启用相似弹幕过滤",
                                   color: "primary"
                                 }, null, 8, ["modelValue"])
@@ -639,7 +679,7 @@ return (_ctx, _cache) => {
                               default: _withCtx(() => [
                                 _createVNode(_component_VTextField, {
                                   modelValue: form.filter_similarity_threshold,
-                                  "onUpdate:modelValue": _cache[24] || (_cache[24] = $event => ((form.filter_similarity_threshold) = $event)),
+                                  "onUpdate:modelValue": _cache[26] || (_cache[26] = $event => ((form.filter_similarity_threshold) = $event)),
                                   modelModifiers: { number: true },
                                   label: "相似度阈值",
                                   type: "number",
@@ -655,7 +695,7 @@ return (_ctx, _cache) => {
                             }),
                             _createVNode(_component_VDivider, { class: "my-3" }),
                             _createVNode(_component_VCol, { cols: "12" }, {
-                              default: _withCtx(() => [...(_cache[45] || (_cache[45] = [
+                              default: _withCtx(() => [...(_cache[47] || (_cache[47] = [
                                 _createElementVNode("div", { class: "text-subtitle-2 font-weight-bold mb-2" }, "同屏密度控制", -1)
                               ]))]),
                               _: 1
@@ -667,7 +707,7 @@ return (_ctx, _cache) => {
                               default: _withCtx(() => [
                                 _createVNode(_component_VTextField, {
                                   modelValue: form.filter_screen_max,
-                                  "onUpdate:modelValue": _cache[25] || (_cache[25] = $event => ((form.filter_screen_max) = $event)),
+                                  "onUpdate:modelValue": _cache[27] || (_cache[27] = $event => ((form.filter_screen_max) = $event)),
                                   modelModifiers: { number: true },
                                   label: "同屏最大弹幕数",
                                   type: "number",
@@ -702,7 +742,7 @@ return (_ctx, _cache) => {
                               default: _withCtx(() => [
                                 _createVNode(_component_VTextField, {
                                   modelValue: form.filter_screen_window,
-                                  "onUpdate:modelValue": _cache[26] || (_cache[26] = $event => ((form.filter_screen_window) = $event)),
+                                  "onUpdate:modelValue": _cache[28] || (_cache[28] = $event => ((form.filter_screen_window) = $event)),
                                   modelModifiers: { number: true },
                                   label: "同屏时间窗口",
                                   type: "number",
@@ -738,7 +778,7 @@ return (_ctx, _cache) => {
                               default: _withCtx(() => [
                                 _createVNode(_component_VTextField, {
                                   modelValue: form.filter_freq_window,
-                                  "onUpdate:modelValue": _cache[27] || (_cache[27] = $event => ((form.filter_freq_window) = $event)),
+                                  "onUpdate:modelValue": _cache[29] || (_cache[29] = $event => ((form.filter_freq_window) = $event)),
                                   modelModifiers: { number: true },
                                   label: "用户频率窗口",
                                   type: "number",
@@ -774,7 +814,7 @@ return (_ctx, _cache) => {
                               default: _withCtx(() => [
                                 _createVNode(_component_VTextField, {
                                   modelValue: form.filter_freq_max,
-                                  "onUpdate:modelValue": _cache[28] || (_cache[28] = $event => ((form.filter_freq_max) = $event)),
+                                  "onUpdate:modelValue": _cache[30] || (_cache[30] = $event => ((form.filter_freq_max) = $event)),
                                   modelModifiers: { number: true },
                                   label: "窗口内最大弹幕",
                                   type: "number",
@@ -804,7 +844,7 @@ return (_ctx, _cache) => {
                             }),
                             _createVNode(_component_VDivider, { class: "my-3" }),
                             _createVNode(_component_VCol, { cols: "12" }, {
-                              default: _withCtx(() => [...(_cache[46] || (_cache[46] = [
+                              default: _withCtx(() => [...(_cache[48] || (_cache[48] = [
                                 _createElementVNode("div", { class: "text-subtitle-2 font-weight-bold mb-2" }, "屏幕区域保留比例", -1)
                               ]))]),
                               _: 1
@@ -816,7 +856,7 @@ return (_ctx, _cache) => {
                               default: _withCtx(() => [
                                 _createVNode(_component_VTextField, {
                                   modelValue: form.filter_screen_top_ratio,
-                                  "onUpdate:modelValue": _cache[29] || (_cache[29] = $event => ((form.filter_screen_top_ratio) = $event)),
+                                  "onUpdate:modelValue": _cache[31] || (_cache[31] = $event => ((form.filter_screen_top_ratio) = $event)),
                                   modelModifiers: { number: true },
                                   label: "顶部保留比例",
                                   type: "number",
@@ -854,7 +894,7 @@ return (_ctx, _cache) => {
                               default: _withCtx(() => [
                                 _createVNode(_component_VTextField, {
                                   modelValue: form.filter_screen_bottom_ratio,
-                                  "onUpdate:modelValue": _cache[30] || (_cache[30] = $event => ((form.filter_screen_bottom_ratio) = $event)),
+                                  "onUpdate:modelValue": _cache[32] || (_cache[32] = $event => ((form.filter_screen_bottom_ratio) = $event)),
                                   modelModifiers: { number: true },
                                   label: "底部保留比例",
                                   type: "number",
@@ -892,7 +932,7 @@ return (_ctx, _cache) => {
                               default: _withCtx(() => [
                                 _createVNode(_component_VTextField, {
                                   modelValue: form.filter_screen_scroll_ratio,
-                                  "onUpdate:modelValue": _cache[31] || (_cache[31] = $event => ((form.filter_screen_scroll_ratio) = $event)),
+                                  "onUpdate:modelValue": _cache[33] || (_cache[33] = $event => ((form.filter_screen_scroll_ratio) = $event)),
                                   modelModifiers: { number: true },
                                   label: "滚动保留比例",
                                   type: "number",
@@ -952,7 +992,7 @@ return (_ctx, _cache) => {
                         default: _withCtx(() => [
                           _createVNode(_component_VTextField, {
                             modelValue: form.max_threads,
-                            "onUpdate:modelValue": _cache[32] || (_cache[32] = $event => ((form.max_threads) = $event)),
+                            "onUpdate:modelValue": _cache[34] || (_cache[34] = $event => ((form.max_threads) = $event)),
                             modelModifiers: { number: true },
                             label: "最大线程数",
                             type: "number",
@@ -988,7 +1028,7 @@ return (_ctx, _cache) => {
                 icon: "mdi-restore",
                 start: ""
               }),
-              _cache[47] || (_cache[47] = _createTextVNode(" 重置 ", -1))
+              _cache[49] || (_cache[49] = _createTextVNode(" 重置 ", -1))
             ]),
             _: 1
           }),
@@ -1004,7 +1044,7 @@ return (_ctx, _cache) => {
                 icon: "mdi-content-save",
                 start: ""
               }),
-              _cache[48] || (_cache[48] = _createTextVNode(" 保存配置 ", -1))
+              _cache[50] || (_cache[50] = _createTextVNode(" 保存配置 ", -1))
             ]),
             _: 1
           }, 8, ["loading"])
@@ -1018,6 +1058,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-ac6a3b23"]]);
+const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-63385b23"]]);
 
 export { Config as default };

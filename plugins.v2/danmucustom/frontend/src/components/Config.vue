@@ -69,6 +69,28 @@
                 persistent-hint
               />
             </VCol>
+            <VCol cols="12" md="6">
+              <VTextField
+                v-model.number="form.max_retry_times"
+                label="最大重试次数"
+                type="number"
+                variant="outlined"
+                density="compact"
+                hint="单个文件最多被重试的次数（默认 3）"
+                persistent-hint
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VTextField
+                v-model.number="form.max_retry_per_run"
+                label="单次处理上限"
+                type="number"
+                variant="outlined"
+                density="compact"
+                hint="每次定时任务最多处理 N 个重试文件（默认 50）"
+                persistent-hint
+              />
+            </VCol>
             <VCol cols="12">
               <VSwitch
                 v-model="form.enable_strm"
@@ -491,6 +513,8 @@ const defaultForm = {
   auto_scrape: true,
   chConvert: 0,
   enable_retry_task: true,
+  max_retry_times: 3,
+  max_retry_per_run: 50,
   screen_area: 'full',
   enable_strm: true,
   filter_enabled: true,

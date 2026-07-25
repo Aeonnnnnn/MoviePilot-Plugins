@@ -111,7 +111,9 @@ class DanmuCustom(_PluginBase):
     _FILTER_CUMULATIVE_KEY = "filter_cumulative_stats"
     # 新增重试相关配置
     _min_danmu_count = 100  # 最小弹幕数量要求 - 硬编码
-    _max_retry_times = 10  # 最大重试次数 - 硬编码
+    _max_retry_times = 3  # 最大重试次数（批量刮削数千文件时避免无限膨胀；3 次足够覆盖网络抖动）
+    _max_retry_queue_size = 200  # 重试列表最大容量，超出后新失败任务不再入队
+    _max_retry_per_run = 50  # 单次 cron 执行最多处理 N 个重试任务，防止一次性全量处理
     _enable_retry_task = True  # 是否启用重试任务
     
     # 重试任务列表 - 存储格式: {file_path: {"retry_count": int, "last_attempt": datetime, "file_path": str}}
@@ -413,6 +415,8 @@ class DanmuCustom(_PluginBase):
             self._auto_scrape = config.get("auto_scrape", False)
             self._chConvert = config.get("chConvert", 0)
             self._enable_retry_task = config.get("enable_retry_task", True)
+            self._max_retry_times = config.get("max_retry_times", 3)
+            self._max_retry_per_run = config.get("max_retry_per_run", 50)
             self._screen_area = config.get("screen_area", "full")
             self._enable_strm = config.get("enable_strm", True)
             # 弹幕内容过滤配置
@@ -883,6 +887,8 @@ class DanmuCustom(_PluginBase):
             "auto_scrape": self._auto_scrape,
             "chConvert": self._chConvert,
             "enable_retry_task": self._enable_retry_task,
+            "max_retry_times": self._max_retry_times,
+            "max_retry_per_run": self._max_retry_per_run,
             "screen_area": self._screen_area,
             "enable_strm": self._enable_strm,
             # 弹幕内容过滤配置
@@ -916,6 +922,8 @@ class DanmuCustom(_PluginBase):
             self._auto_scrape = config.get("auto_scrape", False)
             self._chConvert = config.get("chConvert", 0)
             self._enable_retry_task = config.get("enable_retry_task", True)
+            self._max_retry_times = config.get("max_retry_times", 3)
+            self._max_retry_per_run = config.get("max_retry_per_run", 50)
             self._screen_area = config.get("screen_area", "full")
             self._enable_strm = config.get("enable_strm", True)
             # 弹幕内容过滤配置
@@ -931,7 +939,7 @@ class DanmuCustom(_PluginBase):
             self._filter_screen_top_ratio = config.get("filter_screen_top_ratio", 0.25)
             self._filter_screen_bottom_ratio = config.get("filter_screen_bottom_ratio", 0.10)
             self._filter_screen_scroll_ratio = config.get("filter_screen_scroll_ratio", 0.65)
-            
+
             # 准备重试任务数据
             retry_tasks_for_save = {}
             with self._retry_lock:
@@ -957,6 +965,8 @@ class DanmuCustom(_PluginBase):
                 "useTmdbID": self._useTmdbID,
                 "auto_scrape": self._auto_scrape,
                 "enable_retry_task": self._enable_retry_task,
+                "max_retry_times": self._max_retry_times,
+                "max_retry_per_run": self._max_retry_per_run,
                 "screen_area": self._screen_area,
                 "enable_strm": self._enable_strm,
                 "filter_enabled": self._filter_enabled,
@@ -1278,6 +1288,10 @@ class DanmuCustom(_PluginBase):
             else:
                 # 添加新的重试任务
                 if danmu_count < self._min_danmu_count:
+                    # 队列容量保护：超出上限不入队，防止批量刮削数千文件时无限膨胀
+                    if len(self._retry_tasks) >= self._max_retry_queue_size:
+                        logger.warning(f"重试列表已达上限 ({self._max_retry_queue_size})，丢弃新任务: {file_path}")
+                        return
                     self._retry_tasks[file_path] = {
                         "retry_count": 1,
                         "last_attempt": datetime.now(),
@@ -2428,6 +2442,12 @@ class DanmuCustom(_PluginBase):
         # 创建副本以避免在迭代时修改字典
         with self._retry_lock:
             tasks_to_process = list(self._retry_tasks.items())
+
+        # 按 retry_count 升序排列（优先处理新加入的），超出单次上限则截断
+        tasks_to_process.sort(key=lambda x: x[1].get("retry_count", 0))
+        if len(tasks_to_process) > self._max_retry_per_run:
+            logger.info(f"重试任务过多 ({len(tasks_to_process)})，本次仅处理前 {self._max_retry_per_run} 个")
+            tasks_to_process = tasks_to_process[:self._max_retry_per_run]
 
         for file_path, task_info in tasks_to_process:
             # 检查文件是否仍然存在
