@@ -152,11 +152,6 @@ const loadHistory = async (page = historyPage.value) => {
   }
 };
 
-// 打开历史弹窗时自动加载数据（首次进入不再需要手动切换筛选）
-watch(showHistoryDialog, (open) => {
-  if (open) loadHistory(1);
-});
-
 const statsCards = computed(() => {
   let statusText = '空闲';
   let statusColor = 'grey';
@@ -205,6 +200,11 @@ const showFileBrowser = ref(false);
 const showHistoryDialog = ref(false);
 const directoryPath = ref('');
 const batchMode = ref(false);
+
+// 打开历史弹窗时自动加载数据（首次进入不再需要手动切换筛选）
+watch(showHistoryDialog, (open) => {
+  if (open) loadHistory(1);
+});
 
 // 轮询定时器
 let pollingTimer = null;
@@ -806,21 +806,16 @@ return (_ctx, _cache) => {
         default: _withCtx(() => [
           _createVNode(_component_VCard, null, {
             default: _withCtx(() => [
-              _createVNode(_component_VCardItem, {
-                class: "d-flex align-center flex-wrap",
+              _createVNode(_component_VCardTitle, {
+                class: "d-flex align-center flex-wrap pa-4",
                 style: {"gap":"12px"}
               }, {
                 default: _withCtx(() => [
                   _createElementVNode("div", _hoisted_6, [
-                    _createVNode(_component_VCardTitle, {
-                      class: "text-h6 pa-0",
+                    _cache[27] || (_cache[27] = _createElementVNode("span", {
+                      class: "text-h6",
                       style: {"white-space":"nowrap"}
-                    }, {
-                      default: _withCtx(() => [...(_cache[27] || (_cache[27] = [
-                        _createTextVNode("刮削历史", -1)
-                      ]))]),
-                      _: 1
-                    }),
+                    }, "刮削历史", -1)),
                     _createVNode(_component_VChip, {
                       size: "small",
                       color: "primary",
@@ -1054,6 +1049,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const AppPageScrape = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-f84acc76"]]);
+const AppPageScrape = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-499f9a63"]]);
 
 export { AppPageScrape as default };

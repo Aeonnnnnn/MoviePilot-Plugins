@@ -198,9 +198,9 @@
     <!-- 刮削历史对话框 -->
     <VDialog v-model="showHistoryDialog" max-width="1000">
       <VCard>
-        <VCardItem class="d-flex align-center flex-wrap" style="gap: 12px;">
+        <VCardTitle class="d-flex align-center flex-wrap pa-4" style="gap: 12px;">
           <div class="d-flex align-center" style="gap: 8px; min-width: 0; flex: 1 1 auto; overflow: hidden;">
-            <VCardTitle class="text-h6 pa-0" style="white-space: nowrap;">刮削历史</VCardTitle>
+            <span class="text-h6" style="white-space: nowrap;">刮削历史</span>
             <VChip size="small" color="primary" variant="tonal" style="flex-shrink: 0;">{{ historyTotal }}</VChip>
           </div>
           <div class="d-flex align-center" style="gap: 8px; flex-shrink: 0;">
@@ -216,7 +216,7 @@
             />
             <VBtn icon="mdi-close" variant="text" @click="showHistoryDialog = false" />
           </div>
-        </VCardItem>
+        </VCardTitle>
         <VDivider />
 
         <VCardText style="overflow-x: auto;">
@@ -441,11 +441,6 @@ const loadHistory = async (page = historyPage.value) => {
   }
 }
 
-// 打开历史弹窗时自动加载数据（首次进入不再需要手动切换筛选）
-watch(showHistoryDialog, (open) => {
-  if (open) loadHistory(1)
-})
-
 const statsCards = computed(() => {
   let statusText = '空闲'
   let statusColor = 'grey'
@@ -494,6 +489,11 @@ const showFileBrowser = ref(false)
 const showHistoryDialog = ref(false)
 const directoryPath = ref('')
 const batchMode = ref(false)
+
+// 打开历史弹窗时自动加载数据（首次进入不再需要手动切换筛选）
+watch(showHistoryDialog, (open) => {
+  if (open) loadHistory(1)
+})
 
 // 轮询定时器
 let pollingTimer = null
