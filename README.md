@@ -53,3 +53,11 @@ https://github.com/Aeonnnnnn/MoviePilot-Plugins
 ## 致谢
 
 本插件基于 [HankunYu/MoviePilot-Plugins](https://github.com/HankunYu/MoviePilot-Plugins) 的弹幕刮削 v1.9.0 定制重构，在此感谢原作者的工作。
+
+## 本地开发
+
+本仓库带一个 `pre-push` 版本门禁（`.githooks/pre-push`），会在 `git push` 前校验四处版本号一致（根 `package.json` / 根 `package.v2.json` / 插件目录 `package.v2.json` / `__init__.py` 的 `plugin_version`），避免发布后版本号与源码脱节。克隆后启用：
+
+```sh
+git config core.hooksPath .githooks
+```

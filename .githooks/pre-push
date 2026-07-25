@@ -1,0 +1,8 @@
+#!/bin/sh
+# 版本门禁：在 push 前校验所有插件版本号四处一致，避免市场元数据与插件自报版本分离。
+set -eu
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+python3 .github/scripts/check_plugin_versions.py
