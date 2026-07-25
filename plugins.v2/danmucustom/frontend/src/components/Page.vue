@@ -159,28 +159,31 @@
     <!-- 刮削历史对话框 -->
     <VDialog v-model="showHistoryDialog" max-width="1000">
       <VCard>
-        <VCardItem class="d-flex align-center">
-          <VCardTitle>刮削历史</VCardTitle>
-          <VChip size="small" class="ml-2" color="primary" variant="tonal">{{ historyTotal }}</VChip>
-          <VSpacer />
-          <VSelect
-            v-model="historyStatusFilter"
-            :items="historyStatusOptions"
-            label="状态"
-            density="compact"
-            variant="outlined"
-            hide-details
-            style="max-width: 100px"
-            @update:model-value="loadHistory(1)"
-          />
-          <VBtn icon="mdi-close" variant="text" @click="showHistoryDialog = false" />
-        </VCardItem>
+        <div class="d-flex align-center flex-wrap pa-4" style="gap: 12px;">
+          <div class="d-flex align-center" style="gap: 8px; min-width: 0; flex: 1 1 auto; overflow: hidden;">
+            <span class="text-h6" style="white-space: nowrap;">刮削历史</span>
+            <VChip size="small" color="primary" variant="tonal" style="flex-shrink: 0;">{{ historyTotal }}</VChip>
+          </div>
+          <div class="d-flex align-center" style="gap: 8px; flex-shrink: 0;">
+            <VSelect
+              v-model="historyStatusFilter"
+              :items="historyStatusOptions"
+              label="状态"
+              density="compact"
+              variant="outlined"
+              hide-details
+              style="width: 120px; max-width: 120px;"
+              @update:model-value="loadHistory(1)"
+            />
+            <VBtn icon="mdi-close" variant="text" @click="showHistoryDialog = false" />
+          </div>
+        </div>
         <VDivider />
         <VCardText style="overflow-x: auto;">
           <VAlert v-if="historyError" type="error" variant="tonal" class="mb-3">
             {{ historyError }}
           </VAlert>
-          <VTable v-if="scrapeHistory.length > 0" density="compact" style="min-width: 780px;">"
+          <VTable v-if="scrapeHistory.length > 0" density="compact" style="min-width: 780px;">
             <thead>
               <tr>
                 <th>文件</th>
@@ -272,7 +275,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import {
   mdiMovieOpenStar,
   mdiPlayCircle,
@@ -423,6 +426,11 @@ const loadHistory = async (page = historyPage.value) => {
     scrapeHistory.value = []
   }
 }
+
+// 打开历史弹窗时自动加载数据（首次进入不再需要手动切换筛选）
+watch(showHistoryDialog, (open) => {
+  if (open) loadHistory(1)
+})
 
 const startGlobalScrape = async () => {
   actionLoading.value = 'scrape'

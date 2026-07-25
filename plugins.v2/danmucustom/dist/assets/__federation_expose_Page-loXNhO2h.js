@@ -19,26 +19,38 @@ const _hoisted_6 = {
   class: "mt-1 text-caption text-disabled"
 };
 const _hoisted_7 = {
+  class: "d-flex align-center flex-wrap pa-4",
+  style: {"gap":"12px"}
+};
+const _hoisted_8 = {
+  class: "d-flex align-center",
+  style: {"gap":"8px","min-width":"0","flex":"1 1 auto","overflow":"hidden"}
+};
+const _hoisted_9 = {
+  class: "d-flex align-center",
+  style: {"gap":"8px","flex-shrink":"0"}
+};
+const _hoisted_10 = {
   class: "text-body-2",
   style: {"max-width":"320px","overflow":"hidden","text-overflow":"ellipsis","white-space":"nowrap"}
 };
-const _hoisted_8 = { class: "text-caption" };
-const _hoisted_9 = { class: "text-caption" };
-const _hoisted_10 = { class: "text-caption text-center" };
-const _hoisted_11 = { class: "text-caption text-center" };
-const _hoisted_12 = { class: "text-caption text-center" };
-const _hoisted_13 = { class: "text-caption" };
-const _hoisted_14 = {
+const _hoisted_11 = { class: "text-caption" };
+const _hoisted_12 = { class: "text-caption" };
+const _hoisted_13 = { class: "text-caption text-center" };
+const _hoisted_14 = { class: "text-caption text-center" };
+const _hoisted_15 = { class: "text-caption text-center" };
+const _hoisted_16 = { class: "text-caption" };
+const _hoisted_17 = {
   key: 0,
   class: "text-success"
 };
-const _hoisted_15 = {
+const _hoisted_18 = {
   key: 1,
   class: "text-error"
 };
-const _hoisted_16 = { class: "d-flex justify-center mt-3" };
+const _hoisted_19 = { class: "d-flex justify-center mt-3" };
 
-const {ref,reactive,onMounted} = await importShared('vue');
+const {ref,reactive,onMounted,watch} = await importShared('vue');
 
 const API_PLUGIN_ID = 'DanmuCustom';
 
@@ -175,6 +187,11 @@ const loadHistory = async (page = historyPage.value) => {
     scrapeHistory.value = [];
   }
 };
+
+// 打开历史弹窗时自动加载数据（首次进入不再需要手动切换筛选）
+watch(showHistoryDialog, (open) => {
+  if (open) loadHistory(1);
+});
 
 const startGlobalScrape = async () => {
   actionLoading.value = 'scrape';
@@ -606,26 +623,25 @@ return (_ctx, _cache) => {
         default: _withCtx(() => [
           _createVNode(_component_VCard, null, {
             default: _withCtx(() => [
-              _createVNode(_component_VCardItem, { class: "d-flex align-center" }, {
-                default: _withCtx(() => [
-                  _createVNode(_component_VCardTitle, null, {
-                    default: _withCtx(() => [...(_cache[29] || (_cache[29] = [
-                      _createTextVNode("刮削历史", -1)
-                    ]))]),
-                    _: 1
-                  }),
+              _createElementVNode("div", _hoisted_7, [
+                _createElementVNode("div", _hoisted_8, [
+                  _cache[29] || (_cache[29] = _createElementVNode("span", {
+                    class: "text-h6",
+                    style: {"white-space":"nowrap"}
+                  }, "刮削历史", -1)),
                   _createVNode(_component_VChip, {
                     size: "small",
-                    class: "ml-2",
                     color: "primary",
-                    variant: "tonal"
+                    variant: "tonal",
+                    style: {"flex-shrink":"0"}
                   }, {
                     default: _withCtx(() => [
                       _createTextVNode(_toDisplayString(historyTotal.value), 1)
                     ]),
                     _: 1
-                  }),
-                  _createVNode(_component_VSpacer),
+                  })
+                ]),
+                _createElementVNode("div", _hoisted_9, [
                   _createVNode(_component_VSelect, {
                     modelValue: historyStatusFilter.value,
                     "onUpdate:modelValue": [
@@ -637,16 +653,15 @@ return (_ctx, _cache) => {
                     density: "compact",
                     variant: "outlined",
                     "hide-details": "",
-                    style: {"max-width":"100px"}
+                    style: {"width":"120px","max-width":"120px"}
                   }, null, 8, ["modelValue"]),
                   _createVNode(_component_VBtn, {
                     icon: "mdi-close",
                     variant: "text",
                     onClick: _cache[8] || (_cache[8] = $event => (showHistoryDialog.value = false))
                   })
-                ]),
-                _: 1
-              }),
+                ])
+              ]),
               _createVNode(_component_VDivider),
               _createVNode(_component_VCardText, { style: {"overflow-x":"auto"} }, {
                 default: _withCtx(() => [
@@ -670,8 +685,7 @@ return (_ctx, _cache) => {
                         style: {"min-width":"780px"}
                       }, {
                         default: _withCtx(() => [
-                          _cache[30] || (_cache[30] = _createTextVNode("\" ", -1)),
-                          _cache[31] || (_cache[31] = _createElementVNode("thead", null, [
+                          _cache[30] || (_cache[30] = _createElementVNode("thead", null, [
                             _createElementVNode("tr", null, [
                               _createElementVNode("th", null, "文件"),
                               _createElementVNode("th", null, "状态"),
@@ -686,7 +700,7 @@ return (_ctx, _cache) => {
                           _createElementVNode("tbody", null, [
                             (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(scrapeHistory.value, (item, i) => {
                               return (_openBlock(), _createElementBlock("tr", { key: i }, [
-                                _createElementVNode("td", _hoisted_7, _toDisplayString(item.file_name || item.file_path), 1),
+                                _createElementVNode("td", _hoisted_10, _toDisplayString(item.file_name || item.file_path), 1),
                                 _createElementVNode("td", null, [
                                   _createVNode(_component_VChip, {
                                     color: statusColor(item.status),
@@ -699,15 +713,15 @@ return (_ctx, _cache) => {
                                     _: 2
                                   }, 1032, ["color"])
                                 ]),
-                                _createElementVNode("td", _hoisted_8, _toDisplayString(item.duration_ms != null ? (item.duration_ms / 1000).toFixed(1) + 's' : '--'), 1),
-                                _createElementVNode("td", _hoisted_9, _toDisplayString(item.finished_at || '--'), 1),
-                                _createElementVNode("td", _hoisted_10, _toDisplayString(item.danmu_counts?.received != null ? item.danmu_counts.received : '--'), 1),
-                                _createElementVNode("td", _hoisted_11, _toDisplayString(item.danmu_counts?.blocked != null ? item.danmu_counts.blocked : '--'), 1),
-                                _createElementVNode("td", _hoisted_12, _toDisplayString(item.danmu_counts?.actual != null ? item.danmu_counts.actual : '--'), 1),
-                                _createElementVNode("td", _hoisted_13, [
+                                _createElementVNode("td", _hoisted_11, _toDisplayString(item.duration_ms != null ? (item.duration_ms / 1000).toFixed(1) + 's' : '--'), 1),
+                                _createElementVNode("td", _hoisted_12, _toDisplayString(item.finished_at || '--'), 1),
+                                _createElementVNode("td", _hoisted_13, _toDisplayString(item.danmu_counts?.received != null ? item.danmu_counts.received : '--'), 1),
+                                _createElementVNode("td", _hoisted_14, _toDisplayString(item.danmu_counts?.blocked != null ? item.danmu_counts.blocked : '--'), 1),
+                                _createElementVNode("td", _hoisted_15, _toDisplayString(item.danmu_counts?.actual != null ? item.danmu_counts.actual : '--'), 1),
+                                _createElementVNode("td", _hoisted_16, [
                                   (item.output_ass_path)
-                                    ? (_openBlock(), _createElementBlock("span", _hoisted_14, "已生成"))
-                                    : (_openBlock(), _createElementBlock("span", _hoisted_15, "无"))
+                                    ? (_openBlock(), _createElementBlock("span", _hoisted_17, "已生成"))
+                                    : (_openBlock(), _createElementBlock("span", _hoisted_18, "无"))
                                 ])
                               ]))
                             }), 128))
@@ -722,13 +736,13 @@ return (_ctx, _cache) => {
                           variant: "tonal",
                           class: "mt-2"
                         }, {
-                          default: _withCtx(() => [...(_cache[32] || (_cache[32] = [
+                          default: _withCtx(() => [...(_cache[31] || (_cache[31] = [
                             _createTextVNode(" 暂无刮削记录 ", -1)
                           ]))]),
                           _: 1
                         }))
                       : _createCommentVNode("", true),
-                  _createElementVNode("div", _hoisted_16, [
+                  _createElementVNode("div", _hoisted_19, [
                     _createVNode(_component_VSelect, {
                       modelValue: historyPageSize.value,
                       "onUpdate:modelValue": [
@@ -777,7 +791,7 @@ return (_ctx, _cache) => {
               _createVNode(_component_VCardItem, null, {
                 default: _withCtx(() => [
                   _createVNode(_component_VCardTitle, null, {
-                    default: _withCtx(() => [...(_cache[33] || (_cache[33] = [
+                    default: _withCtx(() => [...(_cache[32] || (_cache[32] = [
                       _createTextVNode("目录刮削", -1)
                     ]))]),
                     _: 1
@@ -813,7 +827,7 @@ return (_ctx, _cache) => {
                     variant: "text",
                     onClick: _cache[15] || (_cache[15] = $event => (showDirectoryDialog.value = false))
                   }, {
-                    default: _withCtx(() => [...(_cache[34] || (_cache[34] = [
+                    default: _withCtx(() => [...(_cache[33] || (_cache[33] = [
                       _createTextVNode("取消", -1)
                     ]))]),
                     _: 1
@@ -824,7 +838,7 @@ return (_ctx, _cache) => {
                     loading: actionLoading.value === 'dir',
                     onClick: startDirectoryScrape
                   }, {
-                    default: _withCtx(() => [...(_cache[35] || (_cache[35] = [
+                    default: _withCtx(() => [...(_cache[34] || (_cache[34] = [
                       _createTextVNode("开始刮削", -1)
                     ]))]),
                     _: 1
@@ -845,6 +859,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Page = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-00d1f178"]]);
+const Page = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-d48c1764"]]);
 
 export { Page as default };
