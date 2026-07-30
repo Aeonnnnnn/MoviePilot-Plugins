@@ -18,11 +18,11 @@
     <VCardText>
       <VRow>
         <VCol cols="12" sm="6" md="3">
-          <VCard variant="tonal" :color="scrapeProgress.running ? 'success' : 'grey'" class="pa-3 text-center">
+          <VCard variant="tonal" :color="scrapePaused ? 'warning' : (scrapeProgress.running ? 'success' : 'grey')" class="pa-3 text-center">
             <div class="text-caption text-medium-emphasis">刮削状态</div>
             <div class="text-h5 font-weight-bold mt-1">
-              <VIcon :icon="scrapeProgress.running ? 'mdi-play-circle' : 'mdi-stop-circle'" size="24" class="mr-1" />
-              {{ scrapeProgress.running ? '运行中' : '空闲' }}
+              <VIcon :icon="scrapePaused ? 'mdi-pause-circle' : (scrapeProgress.running ? 'mdi-play-circle' : 'mdi-stop-circle')" size="24" class="mr-1" />
+              {{ scrapePaused ? '已暂停' : (scrapeProgress.running ? '运行中' : '空闲') }}
             </div>
           </VCard>
         </VCol>
@@ -61,6 +61,39 @@
 
       <div v-if="scrapeProgress.duration" class="mt-1 text-caption text-disabled">
         已运行: {{ formatDuration(scrapeProgress.duration) }}
+      </div>
+
+      <!-- 任务控制按钮：暂停/继续/停止 -->
+      <div v-if="scrapeProgress.running || scrapePaused" class="mt-3 d-flex align-center" style="gap: 8px;">
+        <VBtn
+          v-if="!scrapePaused"
+          color="warning"
+          variant="tonal"
+          prepend-icon="mdi-pause"
+          :loading="actionLoading === 'pause'"
+          @click="pauseScrape"
+        >
+          暂停
+        </VBtn>
+        <VBtn
+          v-if="scrapePaused"
+          color="success"
+          variant="tonal"
+          prepend-icon="mdi-play-outline"
+          :loading="actionLoading === 'resume'"
+          @click="resumeScrape"
+        >
+          继续
+        </VBtn>
+        <VBtn
+          color="error"
+          variant="tonal"
+          prepend-icon="mdi-stop"
+          :loading="actionLoading === 'cancel'"
+          @click="cancelScrape"
+        >
+          停止
+        </VBtn>
       </div>
     </VCardText>
 
@@ -279,8 +312,12 @@ import { ref, reactive, onMounted, watch } from 'vue'
 import {
   mdiMovieOpenStar,
   mdiPlayCircle,
+  mdiPauseCircle,
   mdiStopCircle,
   mdiPlay,
+  mdiPause,
+  mdiPlayOutline,
+  mdiStop,
   mdiFolderSearch,
   mdiRefresh,
   mdiCog,
@@ -327,6 +364,7 @@ const actionLoading = ref(null)
 const showDirectoryDialog = ref(false)
 const showFileBrowser = ref(false)
 const showHistoryDialog = ref(false)
+const scrapePaused = ref(false)
 const directoryPath = ref('')
 const batchMode = ref(false)
 const scrapeHistory = ref([])
@@ -347,6 +385,7 @@ const historyStatusOptions = [
 
 const scrapeProgress = reactive({
   running: false,
+  paused: false,
   total: 0,
   current: 0,
   current_file: '',
@@ -391,8 +430,9 @@ const refreshData = async () => {
   try {
     const res = await requestGet('/status')
     const data = unwrapResponse(res)
-    status.value = data.running ? '运行中' : '空闲'
+    status.value = data.paused ? '已暂停' : (data.running ? '运行中' : '空闲')
     Object.assign(scrapeProgress, data)
+    scrapePaused.value = data.paused || false
     lastUpdated.value = new Date().toLocaleTimeString()
   } catch (err) {
     if (err?.response?.status === 404 || err?.status === 404) {
@@ -448,6 +488,55 @@ const startGlobalScrape = async () => {
     } else {
       error.value = `刮削请求失败: ${err.message}`
     }
+  } finally {
+    actionLoading.value = null
+  }
+}
+
+const pauseScrape = async () => {
+  actionLoading.value = 'pause'
+  try {
+    const res = await requestGet('/task/pause')
+    if (res?.success) {
+      scrapePaused.value = true
+    } else {
+      error.value = res?.message || '暂停失败'
+    }
+  } catch (err) {
+    error.value = `暂停请求失败: ${err.message}`
+  } finally {
+    actionLoading.value = null
+  }
+}
+
+const resumeScrape = async () => {
+  actionLoading.value = 'resume'
+  try {
+    const res = await requestGet('/task/resume')
+    if (res?.success) {
+      scrapePaused.value = false
+    } else {
+      error.value = res?.message || '继续失败'
+    }
+  } catch (err) {
+    error.value = `继续请求失败: ${err.message}`
+  } finally {
+    actionLoading.value = null
+  }
+}
+
+const cancelScrape = async () => {
+  actionLoading.value = 'cancel'
+  try {
+    const res = await requestGet('/task/cancel')
+    if (res?.success) {
+      scrapePaused.value = false
+      await refreshData()
+    } else {
+      error.value = res?.message || '停止失败'
+    }
+  } catch (err) {
+    error.value = `停止请求失败: ${err.message}`
   } finally {
     actionLoading.value = null
   }

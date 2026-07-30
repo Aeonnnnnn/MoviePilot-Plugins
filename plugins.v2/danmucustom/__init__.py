@@ -63,7 +63,7 @@ class DanmuCustom(_PluginBase):
     # 主题色
     plugin_color = "#3B5E8E"
     # 插件版本
-    plugin_version = "3.4.5"
+    plugin_version = "3.4.6"
     # 插件作者
     plugin_author = "Aeonnnnnn"
     # 作者主页
@@ -412,7 +412,7 @@ class DanmuCustom(_PluginBase):
             self._path = config.get("path", "")
             self._onlyFromBili = config.get("onlyFromBili", False)
             self._useTmdbID = config.get("useTmdbID", True)
-            self._auto_scrape = config.get("auto_scrape", False)
+            self._auto_scrape = config.get("auto_scrape", True)
             self._chConvert = config.get("chConvert", 0)
             self._enable_retry_task = config.get("enable_retry_task", True)
             self._max_retry_times = config.get("max_retry_times", 3)
@@ -919,7 +919,7 @@ class DanmuCustom(_PluginBase):
             self._path = config.get("path", "")
             self._onlyFromBili = config.get("onlyFromBili", False)
             self._useTmdbID = config.get("useTmdbID", True)
-            self._auto_scrape = config.get("auto_scrape", False)
+            self._auto_scrape = config.get("auto_scrape", True)
             self._chConvert = config.get("chConvert", 0)
             self._enable_retry_task = config.get("enable_retry_task", True)
             self._max_retry_times = config.get("max_retry_times", 3)
@@ -997,8 +997,23 @@ class DanmuCustom(_PluginBase):
     # 侧栏 nav_key(scrape/filter) 由 AppPage.vue 按 navKey 切到
     # AppPageScrape / AppPageFilter。
     def get_page(self) -> List[dict]:
-        """Vue mode doesn't use Vuetify page definitions."""
-        return None
+        """Vue federation page definitions for sidebar navigation."""
+        if not self.get_state():
+            return []
+        return [
+            {
+                "name": "弹幕刮削",
+                "key": "scrape",
+                "component": "Page",
+                "icon": "mdi-movie-open-star",
+            },
+            {
+                "name": "弹幕过滤",
+                "key": "filter",
+                "component": "AppPageFilter",
+                "icon": "mdi-filter-variant",
+            },
+        ]
 
     # --- V2 Vue Interface Methods ---
     @staticmethod
@@ -3144,6 +3159,7 @@ class DanmuCustom(_PluginBase):
             counts = state.get("counts") or {}
             safe = {
                 "status": state.get("status"),
+                "paused": state.get("status") == "paused",
                 "total": state.get("total", 0),
                 "processed": state.get("processed", 0),
                 "success": counts.get("success", 0),

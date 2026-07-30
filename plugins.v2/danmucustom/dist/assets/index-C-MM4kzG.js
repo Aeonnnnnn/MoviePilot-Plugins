@@ -1,5 +1,5 @@
 import { importShared } from './__federation_fn_import-DE4nw86B.js';
-import Page from './__federation_expose_Page-loXNhO2h.js';
+import Page from './__federation_expose_Page-BS1YulwJ.js';
 import Config from './__federation_expose_Config-CRgSVF0H.js';
 import Dashboard from './__federation_expose_Dashboard-Cm69bEDz.js';
 import AppPageScrape from './__federation_expose_AppPageScrape-DDuDdU3c.js';

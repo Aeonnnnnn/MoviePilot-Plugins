@@ -19,36 +19,41 @@ const _hoisted_6 = {
   class: "mt-1 text-caption text-disabled"
 };
 const _hoisted_7 = {
+  key: 3,
+  class: "mt-3 d-flex align-center",
+  style: {"gap":"8px"}
+};
+const _hoisted_8 = {
   class: "d-flex align-center flex-wrap pa-4",
   style: {"gap":"12px"}
 };
-const _hoisted_8 = {
+const _hoisted_9 = {
   class: "d-flex align-center",
   style: {"gap":"8px","min-width":"0","flex":"1 1 auto","overflow":"hidden"}
 };
-const _hoisted_9 = {
+const _hoisted_10 = {
   class: "d-flex align-center",
   style: {"gap":"8px","flex-shrink":"0"}
 };
-const _hoisted_10 = {
+const _hoisted_11 = {
   class: "text-body-2",
   style: {"max-width":"320px","overflow":"hidden","text-overflow":"ellipsis","white-space":"nowrap"}
 };
-const _hoisted_11 = { class: "text-caption" };
 const _hoisted_12 = { class: "text-caption" };
-const _hoisted_13 = { class: "text-caption text-center" };
+const _hoisted_13 = { class: "text-caption" };
 const _hoisted_14 = { class: "text-caption text-center" };
 const _hoisted_15 = { class: "text-caption text-center" };
-const _hoisted_16 = { class: "text-caption" };
-const _hoisted_17 = {
+const _hoisted_16 = { class: "text-caption text-center" };
+const _hoisted_17 = { class: "text-caption" };
+const _hoisted_18 = {
   key: 0,
   class: "text-success"
 };
-const _hoisted_18 = {
+const _hoisted_19 = {
   key: 1,
   class: "text-error"
 };
-const _hoisted_19 = { class: "d-flex justify-center mt-3" };
+const _hoisted_20 = { class: "d-flex justify-center mt-3" };
 
 const {ref,reactive,onMounted,watch} = await importShared('vue');
 
@@ -88,6 +93,7 @@ const actionLoading = ref(null);
 const showDirectoryDialog = ref(false);
 const showFileBrowser = ref(false);
 const showHistoryDialog = ref(false);
+const scrapePaused = ref(false);
 const directoryPath = ref('');
 const batchMode = ref(false);
 const scrapeHistory = ref([]);
@@ -108,6 +114,7 @@ const historyStatusOptions = [
 
 const scrapeProgress = reactive({
   running: false,
+  paused: false,
   total: 0,
   current: 0,
   current_file: '',
@@ -152,8 +159,9 @@ const refreshData = async () => {
   try {
     const res = await requestGet('/status');
     const data = unwrapResponse(res);
-    status.value = data.running ? '运行中' : '空闲';
+    status.value = data.paused ? '已暂停' : (data.running ? '运行中' : '空闲');
     Object.assign(scrapeProgress, data);
+    scrapePaused.value = data.paused || false;
     lastUpdated.value = new Date().toLocaleTimeString();
   } catch (err) {
     if (err?.response?.status === 404 || err?.status === 404) {
@@ -214,6 +222,55 @@ const startGlobalScrape = async () => {
   }
 };
 
+const pauseScrape = async () => {
+  actionLoading.value = 'pause';
+  try {
+    const res = await requestGet('/task/pause');
+    if (res?.success) {
+      scrapePaused.value = true;
+    } else {
+      error.value = res?.message || '暂停失败';
+    }
+  } catch (err) {
+    error.value = `暂停请求失败: ${err.message}`;
+  } finally {
+    actionLoading.value = null;
+  }
+};
+
+const resumeScrape = async () => {
+  actionLoading.value = 'resume';
+  try {
+    const res = await requestGet('/task/resume');
+    if (res?.success) {
+      scrapePaused.value = false;
+    } else {
+      error.value = res?.message || '继续失败';
+    }
+  } catch (err) {
+    error.value = `继续请求失败: ${err.message}`;
+  } finally {
+    actionLoading.value = null;
+  }
+};
+
+const cancelScrape = async () => {
+  actionLoading.value = 'cancel';
+  try {
+    const res = await requestGet('/task/cancel');
+    if (res?.success) {
+      scrapePaused.value = false;
+      await refreshData();
+    } else {
+      error.value = res?.message || '停止失败';
+    }
+  } catch (err) {
+    error.value = `停止请求失败: ${err.message}`;
+  } finally {
+    actionLoading.value = null;
+  }
+};
+
 const startDirectoryScrape = async () => {
   if (!directoryPath.value.trim()) {
     error.value = '请输入目标目录路径';
@@ -257,9 +314,9 @@ return (_ctx, _cache) => {
   const _component_VCol = _resolveComponent("VCol");
   const _component_VRow = _resolveComponent("VRow");
   const _component_VProgressLinear = _resolveComponent("VProgressLinear");
+  const _component_VBtn = _resolveComponent("VBtn");
   const _component_VCardText = _resolveComponent("VCardText");
   const _component_VDivider = _resolveComponent("VDivider");
-  const _component_VBtn = _resolveComponent("VBtn");
   const _component_VSpacer = _resolveComponent("VSpacer");
   const _component_VDialog = _resolveComponent("VDialog");
   const _component_VChip = _resolveComponent("VChip");
@@ -325,18 +382,18 @@ return (_ctx, _cache) => {
                 default: _withCtx(() => [
                   _createVNode(_component_VCard, {
                     variant: "tonal",
-                    color: scrapeProgress.running ? 'success' : 'grey',
+                    color: scrapePaused.value ? 'warning' : (scrapeProgress.running ? 'success' : 'grey'),
                     class: "pa-3 text-center"
                   }, {
                     default: _withCtx(() => [
                       _cache[17] || (_cache[17] = _createElementVNode("div", { class: "text-caption text-medium-emphasis" }, "刮削状态", -1)),
                       _createElementVNode("div", _hoisted_1, [
                         _createVNode(_component_VIcon, {
-                          icon: scrapeProgress.running ? 'mdi-play-circle' : 'mdi-stop-circle',
+                          icon: scrapePaused.value ? 'mdi-pause-circle' : (scrapeProgress.running ? 'mdi-play-circle' : 'mdi-stop-circle'),
                           size: "24",
                           class: "mr-1"
                         }, null, 8, ["icon"]),
-                        _createTextVNode(" " + _toDisplayString(scrapeProgress.running ? '运行中' : '空闲'), 1)
+                        _createTextVNode(" " + _toDisplayString(scrapePaused.value ? '已暂停' : (scrapeProgress.running ? '运行中' : '空闲')), 1)
                       ])
                     ]),
                     _: 1
@@ -422,6 +479,52 @@ return (_ctx, _cache) => {
             : _createCommentVNode("", true),
           (scrapeProgress.duration)
             ? (_openBlock(), _createElementBlock("div", _hoisted_6, " 已运行: " + _toDisplayString(formatDuration(scrapeProgress.duration)), 1))
+            : _createCommentVNode("", true),
+          (scrapeProgress.running || scrapePaused.value)
+            ? (_openBlock(), _createElementBlock("div", _hoisted_7, [
+                (!scrapePaused.value)
+                  ? (_openBlock(), _createBlock(_component_VBtn, {
+                      key: 0,
+                      color: "warning",
+                      variant: "tonal",
+                      "prepend-icon": "mdi-pause",
+                      loading: actionLoading.value === 'pause',
+                      onClick: pauseScrape
+                    }, {
+                      default: _withCtx(() => [...(_cache[21] || (_cache[21] = [
+                        _createTextVNode(" 暂停 ", -1)
+                      ]))]),
+                      _: 1
+                    }, 8, ["loading"]))
+                  : _createCommentVNode("", true),
+                (scrapePaused.value)
+                  ? (_openBlock(), _createBlock(_component_VBtn, {
+                      key: 1,
+                      color: "success",
+                      variant: "tonal",
+                      "prepend-icon": "mdi-play-outline",
+                      loading: actionLoading.value === 'resume',
+                      onClick: resumeScrape
+                    }, {
+                      default: _withCtx(() => [...(_cache[22] || (_cache[22] = [
+                        _createTextVNode(" 继续 ", -1)
+                      ]))]),
+                      _: 1
+                    }, 8, ["loading"]))
+                  : _createCommentVNode("", true),
+                _createVNode(_component_VBtn, {
+                  color: "error",
+                  variant: "tonal",
+                  "prepend-icon": "mdi-stop",
+                  loading: actionLoading.value === 'cancel',
+                  onClick: cancelScrape
+                }, {
+                  default: _withCtx(() => [...(_cache[23] || (_cache[23] = [
+                    _createTextVNode(" 停止 ", -1)
+                  ]))]),
+                  _: 1
+                }, 8, ["loading"])
+              ]))
             : _createCommentVNode("", true)
         ]),
         _: 1
@@ -429,7 +532,7 @@ return (_ctx, _cache) => {
       _createVNode(_component_VDivider),
       _createVNode(_component_VCardText, { class: "pb-2" }, {
         default: _withCtx(() => [
-          _cache[27] || (_cache[27] = _createElementVNode("div", { class: "text-subtitle-2 font-weight-bold mb-2" }, "快速操作", -1)),
+          _cache[30] || (_cache[30] = _createElementVNode("div", { class: "text-subtitle-2 font-weight-bold mb-2" }, "快速操作", -1)),
           _createVNode(_component_VRow, null, {
             default: _withCtx(() => [
               _createVNode(_component_VCol, {
@@ -448,7 +551,7 @@ return (_ctx, _cache) => {
                     disabled: scrapeProgress.running,
                     onClick: startGlobalScrape
                   }, {
-                    default: _withCtx(() => [...(_cache[21] || (_cache[21] = [
+                    default: _withCtx(() => [...(_cache[24] || (_cache[24] = [
                       _createTextVNode(" 全局刮削 ", -1)
                     ]))]),
                     _: 1
@@ -472,7 +575,7 @@ return (_ctx, _cache) => {
                     disabled: scrapeProgress.running,
                     onClick: _cache[0] || (_cache[0] = $event => (showDirectoryDialog.value = true))
                   }, {
-                    default: _withCtx(() => [...(_cache[22] || (_cache[22] = [
+                    default: _withCtx(() => [...(_cache[25] || (_cache[25] = [
                       _createTextVNode(" 目录刮削 ", -1)
                     ]))]),
                     _: 1
@@ -495,7 +598,7 @@ return (_ctx, _cache) => {
                     loading: loading.value,
                     onClick: refreshData
                   }, {
-                    default: _withCtx(() => [...(_cache[23] || (_cache[23] = [
+                    default: _withCtx(() => [...(_cache[26] || (_cache[26] = [
                       _createTextVNode(" 刷新状态 ", -1)
                     ]))]),
                     _: 1
@@ -516,7 +619,7 @@ return (_ctx, _cache) => {
                     "prepend-icon": "mdi-folder-multiple",
                     onClick: _cache[1] || (_cache[1] = $event => (showFileBrowser.value = true))
                   }, {
-                    default: _withCtx(() => [...(_cache[24] || (_cache[24] = [
+                    default: _withCtx(() => [...(_cache[27] || (_cache[27] = [
                       _createTextVNode(" 文件浏览 ", -1)
                     ]))]),
                     _: 1
@@ -537,7 +640,7 @@ return (_ctx, _cache) => {
                     "prepend-icon": "mdi-history",
                     onClick: _cache[2] || (_cache[2] = $event => (showHistoryDialog.value = true))
                   }, {
-                    default: _withCtx(() => [...(_cache[25] || (_cache[25] = [
+                    default: _withCtx(() => [...(_cache[28] || (_cache[28] = [
                       _createTextVNode(" 刮削历史 ", -1)
                     ]))]),
                     _: 1
@@ -559,7 +662,7 @@ return (_ctx, _cache) => {
                     "prepend-icon": "mdi-cog",
                     onClick: _cache[3] || (_cache[3] = $event => (emit('switch')))
                   }, {
-                    default: _withCtx(() => [...(_cache[26] || (_cache[26] = [
+                    default: _withCtx(() => [...(_cache[29] || (_cache[29] = [
                       _createTextVNode(" 配置 ", -1)
                     ]))]),
                     _: 1
@@ -585,7 +688,7 @@ return (_ctx, _cache) => {
               _createVNode(_component_VCardItem, { class: "d-flex align-center" }, {
                 default: _withCtx(() => [
                   _createVNode(_component_VCardTitle, null, {
-                    default: _withCtx(() => [...(_cache[28] || (_cache[28] = [
+                    default: _withCtx(() => [...(_cache[31] || (_cache[31] = [
                       _createTextVNode("文件浏览", -1)
                     ]))]),
                     _: 1
@@ -623,9 +726,9 @@ return (_ctx, _cache) => {
         default: _withCtx(() => [
           _createVNode(_component_VCard, null, {
             default: _withCtx(() => [
-              _createElementVNode("div", _hoisted_7, [
-                _createElementVNode("div", _hoisted_8, [
-                  _cache[29] || (_cache[29] = _createElementVNode("span", {
+              _createElementVNode("div", _hoisted_8, [
+                _createElementVNode("div", _hoisted_9, [
+                  _cache[32] || (_cache[32] = _createElementVNode("span", {
                     class: "text-h6",
                     style: {"white-space":"nowrap"}
                   }, "刮削历史", -1)),
@@ -641,7 +744,7 @@ return (_ctx, _cache) => {
                     _: 1
                   })
                 ]),
-                _createElementVNode("div", _hoisted_9, [
+                _createElementVNode("div", _hoisted_10, [
                   _createVNode(_component_VSelect, {
                     modelValue: historyStatusFilter.value,
                     "onUpdate:modelValue": [
@@ -685,7 +788,7 @@ return (_ctx, _cache) => {
                         style: {"min-width":"780px"}
                       }, {
                         default: _withCtx(() => [
-                          _cache[30] || (_cache[30] = _createElementVNode("thead", null, [
+                          _cache[33] || (_cache[33] = _createElementVNode("thead", null, [
                             _createElementVNode("tr", null, [
                               _createElementVNode("th", null, "文件"),
                               _createElementVNode("th", null, "状态"),
@@ -700,7 +803,7 @@ return (_ctx, _cache) => {
                           _createElementVNode("tbody", null, [
                             (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(scrapeHistory.value, (item, i) => {
                               return (_openBlock(), _createElementBlock("tr", { key: i }, [
-                                _createElementVNode("td", _hoisted_10, _toDisplayString(item.file_name || item.file_path), 1),
+                                _createElementVNode("td", _hoisted_11, _toDisplayString(item.file_name || item.file_path), 1),
                                 _createElementVNode("td", null, [
                                   _createVNode(_component_VChip, {
                                     color: statusColor(item.status),
@@ -713,15 +816,15 @@ return (_ctx, _cache) => {
                                     _: 2
                                   }, 1032, ["color"])
                                 ]),
-                                _createElementVNode("td", _hoisted_11, _toDisplayString(item.duration_ms != null ? (item.duration_ms / 1000).toFixed(1) + 's' : '--'), 1),
-                                _createElementVNode("td", _hoisted_12, _toDisplayString(item.finished_at || '--'), 1),
-                                _createElementVNode("td", _hoisted_13, _toDisplayString(item.danmu_counts?.received != null ? item.danmu_counts.received : '--'), 1),
-                                _createElementVNode("td", _hoisted_14, _toDisplayString(item.danmu_counts?.blocked != null ? item.danmu_counts.blocked : '--'), 1),
-                                _createElementVNode("td", _hoisted_15, _toDisplayString(item.danmu_counts?.actual != null ? item.danmu_counts.actual : '--'), 1),
-                                _createElementVNode("td", _hoisted_16, [
+                                _createElementVNode("td", _hoisted_12, _toDisplayString(item.duration_ms != null ? (item.duration_ms / 1000).toFixed(1) + 's' : '--'), 1),
+                                _createElementVNode("td", _hoisted_13, _toDisplayString(item.finished_at || '--'), 1),
+                                _createElementVNode("td", _hoisted_14, _toDisplayString(item.danmu_counts?.received != null ? item.danmu_counts.received : '--'), 1),
+                                _createElementVNode("td", _hoisted_15, _toDisplayString(item.danmu_counts?.blocked != null ? item.danmu_counts.blocked : '--'), 1),
+                                _createElementVNode("td", _hoisted_16, _toDisplayString(item.danmu_counts?.actual != null ? item.danmu_counts.actual : '--'), 1),
+                                _createElementVNode("td", _hoisted_17, [
                                   (item.output_ass_path)
-                                    ? (_openBlock(), _createElementBlock("span", _hoisted_17, "已生成"))
-                                    : (_openBlock(), _createElementBlock("span", _hoisted_18, "无"))
+                                    ? (_openBlock(), _createElementBlock("span", _hoisted_18, "已生成"))
+                                    : (_openBlock(), _createElementBlock("span", _hoisted_19, "无"))
                                 ])
                               ]))
                             }), 128))
@@ -736,13 +839,13 @@ return (_ctx, _cache) => {
                           variant: "tonal",
                           class: "mt-2"
                         }, {
-                          default: _withCtx(() => [...(_cache[31] || (_cache[31] = [
+                          default: _withCtx(() => [...(_cache[34] || (_cache[34] = [
                             _createTextVNode(" 暂无刮削记录 ", -1)
                           ]))]),
                           _: 1
                         }))
                       : _createCommentVNode("", true),
-                  _createElementVNode("div", _hoisted_19, [
+                  _createElementVNode("div", _hoisted_20, [
                     _createVNode(_component_VSelect, {
                       modelValue: historyPageSize.value,
                       "onUpdate:modelValue": [
@@ -791,7 +894,7 @@ return (_ctx, _cache) => {
               _createVNode(_component_VCardItem, null, {
                 default: _withCtx(() => [
                   _createVNode(_component_VCardTitle, null, {
-                    default: _withCtx(() => [...(_cache[32] || (_cache[32] = [
+                    default: _withCtx(() => [...(_cache[35] || (_cache[35] = [
                       _createTextVNode("目录刮削", -1)
                     ]))]),
                     _: 1
@@ -827,7 +930,7 @@ return (_ctx, _cache) => {
                     variant: "text",
                     onClick: _cache[15] || (_cache[15] = $event => (showDirectoryDialog.value = false))
                   }, {
-                    default: _withCtx(() => [...(_cache[33] || (_cache[33] = [
+                    default: _withCtx(() => [...(_cache[36] || (_cache[36] = [
                       _createTextVNode("取消", -1)
                     ]))]),
                     _: 1
@@ -838,7 +941,7 @@ return (_ctx, _cache) => {
                     loading: actionLoading.value === 'dir',
                     onClick: startDirectoryScrape
                   }, {
-                    default: _withCtx(() => [...(_cache[34] || (_cache[34] = [
+                    default: _withCtx(() => [...(_cache[37] || (_cache[37] = [
                       _createTextVNode("开始刮削", -1)
                     ]))]),
                     _: 1
@@ -859,6 +962,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Page = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-d48c1764"]]);
+const Page = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-b171b37b"]]);
 
 export { Page as default };

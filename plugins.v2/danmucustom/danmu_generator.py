@@ -1607,6 +1607,11 @@ def danmu_generator(
                 report = dm_filter.get_filter_report()
                 logger.info(f"过滤明细: {report['breakdown']}")
 
+        # 无弹幕时跳过 .ass 生成，避免写入仅含头部的空文件
+        if len(comments) == 0:
+            logger.info(f"弹幕数量为0 跳过ASS生成: {os.path.basename(file_path)}")
+            return "弹幕数量为0 跳过生成"
+
         output_file = os.path.splitext(file_path)[0] + '.danmu.ass'
         _t_ass = time.perf_counter()
         DanmuConverter.convert_comments_to_ass(
