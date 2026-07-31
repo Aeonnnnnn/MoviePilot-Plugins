@@ -63,7 +63,7 @@ class DanmuCustom(_PluginBase):
     # 主题色
     plugin_color = "#3B5E8E"
     # 插件版本
-    plugin_version = "3.4.6"
+    plugin_version = "3.4.7"
     # 插件作者
     plugin_author = "Aeonnnnnn"
     # 作者主页
@@ -1024,29 +1024,10 @@ class DanmuCustom(_PluginBase):
     def get_sidebar_nav(self) -> List[Dict[str, Any]]:
         """
         侧栏导航入口
-        仅在 Vue 模式下生效，提供插件主界面和过滤管理的侧栏入口
+        侧栏入口由 get_page() 统一管理（Vue federation 模式下 get_page 会生成侧栏条目），
+        get_sidebar_nav 返回空以免造成重复注册。
         """
-        if not self.get_state():
-            return []
-
-        return [
-            {
-                "nav_key": "scrape",
-                "title": "弹幕刮削",
-                "icon": "mdi-movie-open-star",
-                "section": "organize",
-                "permission": "manage",
-                "order": 10,
-            },
-            {
-                "nav_key": "filter",
-                "title": "弹幕过滤",
-                "icon": "mdi-filter-variant",
-                "section": "organize",
-                "permission": "manage",
-                "order": 11,
-            },
-        ]
+        return []
     
     def get_dashboard(self, key: str = None, **kwargs) -> Optional[Tuple[Dict, Dict, List]]:
         """
